@@ -95,9 +95,12 @@ export function HomeScreen({
           <ModeCard
             icon={<Layers className="size-6" strokeWidth={1.8} />}
             title="المراحل"
-            hint={`المرحلة ${current} من ${STAGE_COUNT}`}
-            meta={done > 0 ? `أُنجز ${done}` : "مائة مرحلة"}
-            progress={done / STAGE_COUNT}
+            hint={
+              done > 0
+                ? `واصل من المرحلة ${current}`
+                : "مراحل متتالية · اكتشف المزيد"
+            }
+            meta={done > 0 ? `أُنجز ${done}` : "ابدأ الآن"}
             onClick={onStages}
           />
         </div>

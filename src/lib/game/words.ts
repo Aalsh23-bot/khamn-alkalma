@@ -35,4 +35,4 @@ export function stageAnswer(level: number): string {
 }
 
 /** Campaign length — one word per stage, unlocked in order. */
-export const STAGE_COUNT = 100;
+export const STAGE_COUNT = 300;

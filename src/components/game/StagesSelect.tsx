@@ -26,8 +26,10 @@ export function StagesSelect({
         </button>
         <div className="text-center">
           <h1 className="font-display text-xl font-semibold">المراحل</h1>
-          <p className="text-xs text-muted" dir="ltr">
-            {Object.keys(stages.completed).length} / {STAGE_COUNT}
+          <p className="text-xs text-muted">
+            {Object.keys(stages.completed).length > 0
+              ? `أُنجز ${Object.keys(stages.completed).length}`
+              : "ابدأ المرحلة الأولى"}
           </p>
         </div>
         <span className="flex size-11 items-center justify-center text-muted">
