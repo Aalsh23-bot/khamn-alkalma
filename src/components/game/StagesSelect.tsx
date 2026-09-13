@@ -26,7 +26,7 @@ export function StagesSelect({
         </button>
         <div className="text-center">
           <h1 className="font-display text-xl font-semibold">المراحل</h1>
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted" dir="ltr">
             {Object.keys(stages.completed).length} / {STAGE_COUNT}
           </p>
         </div>

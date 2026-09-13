@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Native Vite root is /native — explicitly scan game sources for class names */
+@source "./**/*.{js,ts,jsx,tsx}";
+@source "../native/**/*.{html,js,ts,jsx,tsx}";
+
 @font-face {
   font-family: "IBM Plex Sans Arabic";
   font-style: normal;
