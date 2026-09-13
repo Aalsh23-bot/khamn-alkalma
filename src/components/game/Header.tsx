@@ -74,7 +74,7 @@ export function Header({
 
       <div className="flex shrink-0 items-center">
         <IconBtn
-          label={hintUsed ? "استُخدم التلميح" : "تلميح"}
+          label={hintUsed ? "استُخدم التلميح" : "كشف حرف مقابل إعلان"}
           onClick={onHint}
           active={hintUsed}
           disabled={hintDisabled}

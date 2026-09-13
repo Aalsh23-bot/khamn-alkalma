@@ -34,6 +34,8 @@ const config: CapacitorConfig = {
       resize: "none",
       resizeOnFullScreen: false,
     },
+    // AdMob app IDs: replace with your production IDs in src/lib/ads/config.ts
+    // and mirror them in ios/Android native manifests when shipping.
   },
 };
 

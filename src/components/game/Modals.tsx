@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Share2, X } from "lucide-react";
+import { Clapperboard, RotateCcw, Share2, X } from "lucide-react";
 import type { LetterStatus } from "@/lib/game/evaluate";
 import {
   formatArabicDate,
@@ -102,6 +102,8 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
             <MiniTile letter="ي" />
           </div>
           <p className="mt-2">ا / أ / إ / آ حرف واحد.</p>
+          <p className="mt-2">زر المصباح اختياري: شاهد إعلاناً لكشف حرف صحيح.</p>
+          <p className="mt-1">بعد الخسارة يمكنك مشاهدة إعلان لاستعادة المحاولة، أو إعادة المرحلة بكلمة جديدة.</p>
         </div>
         <button
           type="button"
@@ -276,6 +278,9 @@ export function ResultModal({
   onMap,
   onHome,
   onStats,
+  onWatchAdRevive,
+  onRetryNewWord,
+  adBusy,
 }: {
   open: boolean;
   onClose: () => void;
@@ -292,8 +297,12 @@ export function ResultModal({
   onMap: () => void;
   onHome: () => void;
   onStats: () => void;
+  onWatchAdRevive?: () => void;
+  onRetryNewWord?: () => void;
+  adBusy?: boolean;
 }) {
   const won = status === "won";
+  const lost = status === "lost";
   const [copied, setCopied] = useState(false);
   const [remain, setRemain] = useState(msUntilTomorrow());
 
@@ -335,10 +344,19 @@ export function ResultModal({
 
   return (
     <Shell open={open} onClose={onClose} title={won ? "أحسنت" : "انتهت المحاولات"}>
-      <p className="text-center text-sm text-muted">الكلمة كانت</p>
-      <p className="mt-1 text-center font-display text-3xl font-semibold text-fg">
-        {solutionLabel(answer)}
-      </p>
+      {won ? (
+        <>
+          <p className="text-center text-sm text-muted">الكلمة كانت</p>
+          <p className="mt-1 text-center font-display text-3xl font-semibold text-fg">
+            {solutionLabel(answer)}
+          </p>
+        </>
+      ) : (
+        <p className="text-center text-sm leading-6 text-muted">
+          خلصت المحاولات. تقدر تشوف إعلاناً وتعيد آخر محاولة،
+          {mode === "stages" ? " أو تعيد المرحلة بكلمة جديدة." : " أو ترجع للرئيسية."}
+        </p>
+      )}
       <div className="mx-auto mt-4 flex flex-col items-center gap-1" dir="rtl">
         {evaluations.map((row, i) => (
           <div key={i} className="flex gap-1">
@@ -357,7 +375,7 @@ export function ResultModal({
         ))}
       </div>
 
-      {mode === "daily" && (
+      {mode === "daily" && won && (
         <div className="mt-5 rounded-xl bg-bg px-4 py-3 text-center">
           <p className="text-xs text-muted">{formatArabicDate(dateKey)}</p>
           <p className="mt-1 text-sm">الكلمة التالية خلال</p>
@@ -367,38 +385,82 @@ export function ResultModal({
         </div>
       )}
 
-      <div className="mt-5 flex gap-2">
-        <button
-          type="button"
-          onClick={onShare}
-          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-accent-fg"
-        >
-          <Share2 className="size-4" />
-          {copied ? "تم النسخ" : "مشاركة"}
-        </button>
-        <button
-          type="button"
-          onClick={onAgain}
-          className="flex h-12 flex-1 items-center justify-center rounded-xl bg-key text-sm font-medium text-fg"
-        >
-          {againLabel}
-        </button>
-      </div>
-      <button
-        type="button"
-        onClick={mode === "stages" ? onMap : onStats}
-        className="mt-2 flex h-11 w-full items-center justify-center text-sm text-muted"
-      >
-        {mode === "stages" ? "الخريطة" : "الإحصائيات"}
-      </button>
-      {mode === "daily" && (
-        <button
-          type="button"
-          onClick={onHome}
-          className="mt-1 flex h-10 w-full items-center justify-center text-sm text-muted"
-        >
-          الرئيسية
-        </button>
+      {lost ? (
+        <div className="mt-5 flex flex-col gap-2">
+          <button
+            type="button"
+            disabled={adBusy}
+            onClick={onWatchAdRevive}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
+          >
+            <Clapperboard className="size-4" />
+            شاهد إعلاناً واستعد المحاولة
+          </button>
+          {mode === "stages" && (
+            <button
+              type="button"
+              disabled={adBusy}
+              onClick={onRetryNewWord}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-key text-sm font-medium text-fg disabled:opacity-50"
+            >
+              <RotateCcw className="size-4" />
+              أعد المرحلة بكلمة جديدة
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={adBusy}
+            onClick={onShare}
+            className="mt-1 flex h-11 w-full items-center justify-center gap-2 text-sm text-muted"
+          >
+            <Share2 className="size-4" />
+            {copied ? "تم النسخ" : "مشاركة النتيجة"}
+          </button>
+          <button
+            type="button"
+            disabled={adBusy}
+            onClick={mode === "stages" ? onMap : onHome}
+            className="flex h-10 w-full items-center justify-center text-sm text-muted"
+          >
+            {mode === "stages" ? "الخريطة" : "الرئيسية"}
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="mt-5 flex gap-2">
+            <button
+              type="button"
+              onClick={onShare}
+              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-accent-fg"
+            >
+              <Share2 className="size-4" />
+              {copied ? "تم النسخ" : "مشاركة"}
+            </button>
+            <button
+              type="button"
+              onClick={onAgain}
+              className="flex h-12 flex-1 items-center justify-center rounded-xl bg-key text-sm font-medium text-fg"
+            >
+              {againLabel}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={mode === "stages" ? onMap : onStats}
+            className="mt-2 flex h-11 w-full items-center justify-center text-sm text-muted"
+          >
+            {mode === "stages" ? "الخريطة" : "الإحصائيات"}
+          </button>
+          {mode === "daily" && (
+            <button
+              type="button"
+              onClick={onHome}
+              className="mt-1 flex h-10 w-full items-center justify-center text-sm text-muted"
+            >
+              الرئيسية
+            </button>
+          )}
+        </>
       )}
     </Shell>
   );

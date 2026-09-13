@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Board } from "./Board";
 import { Header } from "./Header";
 import { HomeScreen } from "./HomeScreen";
@@ -18,6 +18,8 @@ import { isArabicLetter } from "@/lib/game/normalize";
 import { useGame } from "@/lib/game/store";
 import { STAGE_COUNT } from "@/lib/game/words";
 import { isNativeApp } from "@/lib/native";
+import { showRewardedAd } from "@/lib/ads/ads";
+import { RewardedAdOverlay } from "./RewardedAdOverlay";
 
 export function Game() {
   const hydrated = useGame((s) => s.hydrated);
@@ -31,6 +33,8 @@ export function Game() {
   const startStage = useGame((s) => s.startStage);
   const nextStage = useGame((s) => s.nextStage);
   const retryStage = useGame((s) => s.retryStage);
+  const reviveAfterLoss = useGame((s) => s.reviveAfterLoss);
+  const retryStageNewWord = useGame((s) => s.retryStageNewWord);
   const guesses = useGame((s) => s.guesses);
   const evaluations = useGame((s) => s.evaluations);
   const current = useGame((s) => s.current);
@@ -56,6 +60,8 @@ export function Game() {
   const setModal = useGame((s) => s.setModal);
   const setHardMode = useGame((s) => s.setHardMode);
   const setSound = useGame((s) => s.setSound);
+
+  const [adBusy, setAdBusy] = useState(false);
 
   const keyMap = useMemo(
     () => buildKeyMap(guesses, evaluations, hintedCols, answer),
@@ -145,12 +151,28 @@ export function Game() {
         dateKey={dateKey}
         stageLevel={stageLevel}
         hardMode={settings.hardMode}
+        adBusy={adBusy}
+        onWatchAdRevive={() => {
+          void (async () => {
+            if (adBusy) return;
+            setAdBusy(true);
+            try {
+              const result = await showRewardedAd("revive");
+              if (result === "rewarded") reviveAfterLoss();
+              else if (result === "dismissed") setToast("شاهِد الإعلان للنهاية لاستعادة المحاولة");
+              else setToast("الإعلان غير متاح الآن");
+            } finally {
+              setAdBusy(false);
+            }
+          })();
+        }}
+        onRetryNewWord={() => retryStageNewWord()}
         onAgain={() => {
           if (mode === "stages") {
             if (status === "won") {
               if (stageLevel >= STAGE_COUNT) openStages();
               else nextStage();
-            } else retryStage();
+            } else retryStageNewWord();
           } else {
             goHome();
           }
@@ -180,6 +202,7 @@ export function Game() {
           onSettings={() => setModal("settings")}
         />
         {modals}
+        <RewardedAdOverlay />
       </>
     );
   }
@@ -189,6 +212,7 @@ export function Game() {
       <>
         <StagesSelect stages={stages} onBack={goHome} onPick={startStage} />
         {modals}
+        <RewardedAdOverlay />
       </>
     );
   }
@@ -205,9 +229,22 @@ export function Game() {
         onHelp={() => setModal("help")}
         onStats={() => setModal("stats")}
         onSettings={() => setModal("settings")}
-        onHint={useHint}
+        onHint={() => {
+          void (async () => {
+            if (adBusy || hintUsed || inputLocked) return;
+            setAdBusy(true);
+            try {
+              const result = await showRewardedAd("hint");
+              if (result === "rewarded") useHint();
+              else if (result === "dismissed") setToast("شاهِد الإعلان للنهاية لكشف حرف");
+              else setToast("الإعلان غير متاح الآن");
+            } finally {
+              setAdBusy(false);
+            }
+          })();
+        }}
         hintUsed={hintUsed}
-        hintDisabled={inputLocked || hintUsed}
+        hintDisabled={inputLocked || hintUsed || adBusy}
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -245,6 +282,7 @@ export function Game() {
       </div>
 
       {modals}
+      <RewardedAdOverlay />
     </div>
   );
 }

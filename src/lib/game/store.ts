@@ -54,6 +54,10 @@ export interface GameStore {
   startStage: (level: number) => void;
   nextStage: () => void;
   retryStage: () => void;
+  /** After a loss: undo last guess (call only after rewarded ad). */
+  reviveAfterLoss: () => void;
+  /** After a loss on stages: restart level with a different word. */
+  retryStageNewWord: () => void;
   typeLetter: (ch: string) => void;
   backspace: () => void;
   submit: () => void;
@@ -172,16 +176,19 @@ export const useGame = create<GameStore>((set, get) => ({
   },
 
   goHome: () => {
+    commitPendingDailyLoss(get);
     persist(get);
     set({ screen: "home", modal: null, toast: null, revealing: false, shake: false });
   },
 
   openStages: () => {
+    commitPendingDailyLoss(get);
     persist(get);
     set({ screen: "stages", modal: null, toast: null, revealing: false, shake: false });
   },
 
   startDaily: () => {
+    commitPendingDailyLoss(get);
     persist(get);
     const saved = loadRound("daily");
     const today = localDateKey();
@@ -205,6 +212,7 @@ export const useGame = create<GameStore>((set, get) => ({
   },
 
   startStage: (level) => {
+    commitPendingDailyLoss(get);
     persist(get);
     const max = get().stages.unlocked;
     if (level < 1 || level > Math.min(max, STAGE_COUNT)) return;
@@ -245,11 +253,65 @@ export const useGame = create<GameStore>((set, get) => ({
 
   retryStage: () => {
     const level = get().stageLevel;
+    commitPendingDailyLoss(get);
     set({
       screen: "play",
       ...freshStage(level, get().stages.order),
       modal: null,
       toast: null,
+    });
+    persist(get);
+  },
+
+  reviveAfterLoss: () => {
+    const s = get();
+    if (s.status !== "lost" || s.guesses.length === 0) return;
+    set({
+      status: "playing",
+      guesses: s.guesses.slice(0, -1),
+      evaluations: s.evaluations.slice(0, -1),
+      current: "",
+      revealing: false,
+      shake: false,
+      modal: null,
+      toast: "فرصة إضافية — حاول من جديد",
+    });
+    persist(get);
+  },
+
+  retryStageNewWord: () => {
+    const s = get();
+    if (s.mode !== "stages" || s.stageLevel < 1) return;
+    commitPendingDailyLoss(get);
+    const level = s.stageLevel;
+    const order = s.stages.order.slice();
+    const currentIdx = level - 1;
+    const candidates: number[] = [];
+    for (let i = 0; i < order.length; i++) {
+      if (i === currentIdx) continue;
+      const otherLevel = i + 1;
+      // Prefer swapping with stages that are not completed yet.
+      if (!s.stages.completed[String(otherLevel)]) candidates.push(i);
+    }
+    if (candidates.length === 0) {
+      for (let i = 0; i < order.length; i++) {
+        if (i !== currentIdx) candidates.push(i);
+      }
+    }
+    if (candidates.length > 0) {
+      const j = candidates[Math.floor(Math.random() * candidates.length)]!;
+      const tmp = order[currentIdx]!;
+      order[currentIdx] = order[j]!;
+      order[j] = tmp;
+    }
+    const stages = { ...s.stages, order };
+    saveStages(stages);
+    set({
+      stages,
+      screen: "play",
+      ...freshStage(level, order),
+      modal: null,
+      toast: "كلمة جديدة لهذه المرحلة",
     });
     persist(get);
   },
@@ -319,23 +381,24 @@ export const useGame = create<GameStore>((set, get) => ({
       const lost = !won && s.guesses.length >= MAX_GUESSES;
       if (s.status !== "playing") return;
       let stats = s.stats;
-      if ((won || lost) && s.mode === "daily" && stats.lastDailyDate !== s.dateKey) {
+      // Record daily wins immediately. Losses wait so a rewarded revive can undo the last guess
+      // without corrupting streak/played counts.
+      if (won && s.mode === "daily" && stats.lastDailyDate !== s.dateKey) {
         const dist = stats.distribution.slice();
-        if (won) dist[s.guesses.length - 1] = (dist[s.guesses.length - 1] ?? 0) + 1;
-        const currentStreak = won
-          ? stats.lastDailyDate && dayDiff(stats.lastDailyDate, s.dateKey) === 1
+        dist[s.guesses.length - 1] = (dist[s.guesses.length - 1] ?? 0) + 1;
+        const currentStreak =
+          stats.lastDailyDate && dayDiff(stats.lastDailyDate, s.dateKey) === 1
             ? stats.currentStreak + 1
-            : 1
-          : 0;
+            : 1;
         stats = {
           ...stats,
           played: stats.played + 1,
-          wins: stats.wins + (won ? 1 : 0),
+          wins: stats.wins + 1,
           currentStreak,
           maxStreak: Math.max(stats.maxStreak, currentStreak),
           distribution: dist,
           lastDailyDate: s.dateKey,
-          lastDailyWon: won,
+          lastDailyWon: true,
         };
         saveStats(stats);
       }
@@ -426,6 +489,27 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ settings });
   },
 }));
+
+
+/** Finalize a daily loss only when the player leaves without reviving. */
+function commitPendingDailyLoss(get: () => GameStore) {
+  const s = get();
+  if (s.mode !== "daily" || s.status !== "lost") return;
+  const stats = s.stats;
+  if (stats.lastDailyDate === s.dateKey) return;
+  const next = {
+    ...stats,
+    played: stats.played + 1,
+    wins: stats.wins,
+    currentStreak: 0,
+    maxStreak: stats.maxStreak,
+    distribution: stats.distribution.slice(),
+    lastDailyDate: s.dateKey,
+    lastDailyWon: false,
+  };
+  saveStats(next);
+  useGame.setState({ stats: next });
+}
 
 function dayDiff(a: string, b: string): number {
   const [ay, am, ad] = a.split("-").map(Number);
