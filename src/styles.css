@@ -1,0 +1,249 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("/fonts/ibm-plex-sans-arabic-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url("/fonts/ibm-plex-sans-arabic-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("/fonts/ibm-plex-sans-arabic-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans Arabic";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("/fonts/ibm-plex-sans-arabic-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Reem Kufi";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url("/fonts/reem-kufi-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Reem Kufi";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("/fonts/reem-kufi-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Reem Kufi";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("/fonts/reem-kufi-700.woff2") format("woff2");
+}
+
+@theme {
+  --font-sans: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  --font-display: "Reem Kufi", "IBM Plex Sans Arabic", sans-serif;
+
+  --color-bg: #f3eee4;
+  --color-bg-elevated: #fbf8f1;
+  --color-fg: #1c1917;
+  --color-muted: #78716c;
+  --color-subtle: #a8a29e;
+  --color-line: #e4dcd0;
+  --color-tile-empty: #efe8db;
+  --color-tile-border: #b7a890;
+  --color-key: #e7dfd2;
+  --color-key-fg: #1c1917;
+  --color-correct: #6aaa64;
+  --color-correct-fg: #fbf8f1;
+  --color-present: #c9b458;
+  --color-present-fg: #1c1917;
+  --color-absent: #787c7e;
+  --color-absent-fg: #f7f4ee;
+  --color-accent: #3f6f4a;
+  --color-accent-fg: #fbf8f1;
+  --color-danger: #b4534a;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+
+  --shadow-border:
+    0 0 0 1px rgb(28 25 23 / 0.06),
+    0 1px 2px -1px rgb(28 25 23 / 0.06),
+    0 8px 24px -12px rgb(28 25 23 / 0.12);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--color-bg);
+    color: var(--color-fg);
+  }
+
+  html,
+  body,
+  #app,
+  #root {
+    min-height: 100dvh;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-bg);
+    color: var(--color-fg);
+    overflow: hidden;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile,
+  .tile-inner,
+  .keycap,
+  .row-shake {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@keyframes tile-pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes tile-flip {
+  0% {
+    transform: rotateX(0deg);
+  }
+  49% {
+    transform: rotateX(90deg);
+  }
+  50% {
+    transform: rotateX(90deg);
+  }
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+
+@keyframes row-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-8px);
+  }
+  40% {
+    transform: translateX(8px);
+  }
+  60% {
+    transform: translateX(-6px);
+  }
+  80% {
+    transform: translateX(6px);
+  }
+}
+
+@keyframes bounce-win {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  60% {
+    transform: translateY(2px);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.tile-inner.pop {
+  animation: tile-pop 0.12s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.tile-inner.flip {
+  animation: tile-flip 0.5s ease forwards;
+}
+
+.row-shake {
+  animation: row-shake 0.46s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+.tile-inner.win {
+  animation: bounce-win 0.55s ease both;
+}
+
+.game-toast {
+  animation: toast-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dialog-overlay {
+  animation: overlay-in 0.2s ease;
+}
+
+.dialog-panel {
+  animation: panel-in 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
