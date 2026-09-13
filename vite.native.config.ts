@@ -15,6 +15,11 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   publicDir: resolve(rootDir, "public"),
+  server: {
+    fs: {
+      allow: [rootDir],
+    },
+  },
   build: {
     outDir: resolve(rootDir, "dist-native"),
     emptyOutDir: true,
