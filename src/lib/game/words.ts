@@ -29,10 +29,41 @@ export function displayWord(norm: string): string {
   return DISPLAY[norm] ?? norm;
 }
 
-export function stageAnswer(level: number): string {
-  const idx = ((level - 1) % ANSWERS.length + ANSWERS.length) % ANSWERS.length;
-  return ANSWERS[idx]!;
+/** One stage per answer word — no repeats within a campaign. */
+export const STAGE_COUNT = ANSWERS.length;
+
+/** Fisher–Yates shuffle of answer indices (unique random order). */
+export function shuffleStageOrder(length = ANSWERS.length): number[] {
+  const order = Array.from({ length }, (_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const a = order[i]!;
+    order[i] = order[j]!;
+    order[j] = a;
+  }
+  return order;
 }
 
-/** Campaign length — one word per stage, unlocked in order. */
-export const STAGE_COUNT = 300;
+export function isValidStageOrder(
+  order: unknown,
+  length = ANSWERS.length,
+): order is number[] {
+  if (!Array.isArray(order) || order.length !== length) return false;
+  const seen = new Set<number>();
+  for (const value of order) {
+    if (!Number.isInteger(value) || value < 0 || value >= length || seen.has(value)) {
+      return false;
+    }
+    seen.add(value);
+  }
+  return seen.size === length;
+}
+
+/** Stage answers come from a saved random permutation — never sequential, never repeats. */
+export function stageAnswer(level: number, order: number[]): string {
+  const idx = order[level - 1];
+  if (idx == null || idx < 0 || idx >= ANSWERS.length) {
+    return ANSWERS[(level - 1) % ANSWERS.length]!;
+  }
+  return ANSWERS[idx]!;
+}

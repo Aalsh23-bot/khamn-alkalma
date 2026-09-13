@@ -1,4 +1,5 @@
 import type { LetterStatus } from "./evaluate";
+import { isValidStageOrder, shuffleStageOrder, STAGE_COUNT } from "./words";
 
 const VERSION = 3;
 
@@ -40,6 +41,8 @@ export interface StagesSave {
   version: number;
   unlocked: number;
   completed: Record<string, { guesses: number }>;
+  /** Random unique answer-index order for stages 1..STAGE_COUNT */
+  order: number[];
 }
 
 export const defaultStats = (): StatsSave => ({
@@ -64,6 +67,7 @@ export const defaultStages = (): StagesSave => ({
   version: VERSION,
   unlocked: 1,
   completed: {},
+  order: shuffleStageOrder(STAGE_COUNT),
 });
 
 function read<T>(key: string, fallback: T): T {
@@ -130,18 +134,55 @@ export function saveSettings(settings: SettingsSave) {
 }
 
 export function loadStages(): StagesSave {
-  const data = read("khamsa:stages", defaultStages());
-  if (data.version !== VERSION) return defaultStages();
-  return {
-    ...defaultStages(),
-    ...data,
-    unlocked: Math.max(1, data.unlocked || 1),
-    completed: data.completed ?? {},
-  };
+  const make = () => defaultStages();
+
+  if (typeof window === "undefined") return make();
+
+  try {
+    const raw = localStorage.getItem("khamsa:stages");
+    if (!raw) {
+      const fresh = make();
+      saveStages(fresh);
+      return fresh;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<StagesSave>;
+    if (parsed.version !== VERSION) {
+      const fresh = make();
+      saveStages(fresh);
+      return fresh;
+    }
+
+    const needsOrder = !isValidStageOrder(parsed.order, STAGE_COUNT);
+    const order = needsOrder
+      ? shuffleStageOrder(STAGE_COUNT)
+      : (parsed.order as number[]);
+    const stages: StagesSave = {
+      version: VERSION,
+      unlocked: Math.min(STAGE_COUNT, Math.max(1, parsed.unlocked || 1)),
+      completed: parsed.completed ?? {},
+      order,
+    };
+
+    if (needsOrder) saveStages(stages);
+    return stages;
+  } catch {
+    const fresh = make();
+    saveStages(fresh);
+    return fresh;
+  }
 }
 
 export function saveStages(stages: StagesSave) {
-  write("khamsa:stages", { ...stages, version: VERSION });
+  const order = isValidStageOrder(stages.order, STAGE_COUNT)
+    ? stages.order
+    : shuffleStageOrder(STAGE_COUNT);
+  write("khamsa:stages", {
+    ...stages,
+    version: VERSION,
+    unlocked: Math.min(STAGE_COUNT, Math.max(1, stages.unlocked || 1)),
+    order,
+  });
 }
 
 export function completedCount(stages: StagesSave): number {

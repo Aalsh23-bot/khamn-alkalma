@@ -105,14 +105,14 @@ function freshDaily() {
   };
 }
 
-function freshStage(level: number) {
+function freshStage(level: number, order: number[]) {
   const dateKey = localDateKey();
   return {
     mode: "stages" as const,
     dateKey,
     puzzleNum: level,
     stageLevel: level,
-    answer: stageAnswer(level),
+    answer: stageAnswer(level, order),
     guesses: [] as string[],
     evaluations: [] as LetterStatus[][],
     current: "",
@@ -229,7 +229,12 @@ export const useGame = create<GameStore>((set, get) => ({
       });
       return;
     }
-    set({ screen: "play", ...freshStage(level), modal: null, toast: null });
+    set({
+      screen: "play",
+      ...freshStage(level, get().stages.order),
+      modal: null,
+      toast: null,
+    });
     persist(get);
   },
 
@@ -240,7 +245,12 @@ export const useGame = create<GameStore>((set, get) => ({
 
   retryStage: () => {
     const level = get().stageLevel;
-    set({ screen: "play", ...freshStage(level), modal: null, toast: null });
+    set({
+      screen: "play",
+      ...freshStage(level, get().stages.order),
+      modal: null,
+      toast: null,
+    });
     persist(get);
   },
 
