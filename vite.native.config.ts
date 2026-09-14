@@ -16,6 +16,9 @@ export default defineConfig({
   },
   publicDir: resolve(rootDir, "public"),
   server: {
+    host: "0.0.0.0",
+    port: 5173,
+    allowedHosts: true,
     fs: {
       allow: [rootDir],
     },
