@@ -1,5 +1,6 @@
 import { ANSWERS as RAW_ANSWERS, ANSWER_DISPLAY, VALID_GUESSES } from "./words-data";
 import { normalizeWord } from "./normalize";
+import { usageTierByIndex } from "./word-tiers";
 
 export const ANSWERS: string[] = RAW_ANSWERS.map((w) =>
   normalizeWord(ANSWER_DISPLAY[w] ?? w),
@@ -33,7 +34,7 @@ export function displayWord(norm: string): string {
 export const STAGE_COUNT = ANSWERS.length;
 
 /** Saved stage orders with this scheme start easy, then mix difficulties randomly. */
-export const STAGE_ORDER_SCHEME = "progressive-v4";
+export const STAGE_ORDER_SCHEME = "progressive-v5";
 
 /** First N stages draw from the easiest word pool only. */
 export const INTRO_EASY_STAGES = 20;
@@ -42,9 +43,6 @@ export const INTRO_EASY_STAGES = 20;
 export const NEAR_DUPLICATE_MIN_GAP = 12;
 
 type DifficultyTier = "easy" | "medium" | "hard";
-
-const RARE_LETTERS = new Set("ظذزضثصط".split(""));
-const UNCOMMON_LETTERS = new Set("قغخحجش".split(""));
 
 function fisherYates<T>(items: T[]): T[] {
   const arr = items.slice();
@@ -57,37 +55,14 @@ function fisherYates<T>(items: T[]): T[] {
   return arr;
 }
 
-function wordDifficultyScore(word: string): number {
-  let score = 0;
-  const chars = [...word];
-  const unique = new Set(chars);
-
-  for (const ch of chars) {
-    if (RARE_LETTERS.has(ch)) score += 3;
-    else if (UNCOMMON_LETTERS.has(ch)) score += 1.5;
-  }
-
-  score += unique.size * 0.4;
-  if (unique.size < chars.length) score -= 0.8;
-
-  if (word.endsWith("ه")) score -= 0.5;
-  if (word.includes("ى")) score += 0.5;
-
-  return score;
-}
-
-function classifyWordsByDifficulty(length = ANSWERS.length): Record<DifficultyTier, number[]> {
-  const scored = Array.from({ length }, (_, index) => ({
-    index,
-    score: wordDifficultyScore(ANSWERS[index]!),
-  })).sort((a, b) => a.score - b.score);
-
-  const third = Math.floor(length / 3);
-  const easy = scored.slice(0, third).map((item) => item.index);
-  const medium = scored.slice(third, third * 2).map((item) => item.index);
-  const hard = scored.slice(third * 2).map((item) => item.index);
-
-  return { easy, medium, hard };
+/** Map usage tiers → stage difficulty pools (common = easy intro). */
+function classifyWordsByDifficulty(_length = ANSWERS.length): Record<DifficultyTier, number[]> {
+  const tiers = usageTierByIndex(ANSWERS);
+  return {
+    easy: tiers.common.slice(),
+    medium: tiers.familiar.slice(),
+    hard: tiers.rare.slice(),
+  };
 }
 
 function pickWeightedPool(
