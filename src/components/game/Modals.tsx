@@ -94,14 +94,17 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
           <p>غير موجود</p>
         </div>
         <div className="rounded-xl bg-bg p-3 text-sm leading-7 text-muted">
-          <p className="mb-2 font-medium text-fg">ه و ة حرفان مختلفان</p>
-          <div className="flex items-center gap-2">
+          <p className="mb-2 font-medium text-fg">ه و ة حرفان مختلفان · ى و ي مختلفان</p>
+          <div className="flex flex-wrap items-center gap-2">
             <MiniTile letter="ه" />
             <MiniTile letter="ة" />
             <MiniTile letter="ى" />
             <MiniTile letter="ي" />
+            <MiniTile letter="ئ" />
+            <MiniTile letter="ؤ" />
           </div>
           <p className="mt-2">ا / أ / إ / آ حرف واحد.</p>
+          <p className="mt-1">ئ و ؤ حرفان مستقلان (مثل: حقائق، مؤتمر).</p>
           <p className="mt-2">زر المصباح اختياري: شاهد إعلاناً لكشف حرف صحيح.</p>
           <p className="mt-1">بعد الخسارة يمكنك مشاهدة إعلان لاستعادة المحاولة، أو إعادة المرحلة بكلمة جديدة.</p>
         </div>
