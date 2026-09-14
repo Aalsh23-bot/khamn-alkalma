@@ -33,10 +33,13 @@ export function displayWord(norm: string): string {
 export const STAGE_COUNT = ANSWERS.length;
 
 /** Saved stage orders with this scheme start easy, then mix difficulties randomly. */
-export const STAGE_ORDER_SCHEME = "progressive-v1";
+export const STAGE_ORDER_SCHEME = "progressive-v2";
 
 /** First N stages draw from the easiest word pool only. */
 export const INTRO_EASY_STAGES = 20;
+
+/** Minimum stage gap between words that differ by only one letter. */
+export const NEAR_DUPLICATE_MIN_GAP = 12;
 
 type DifficultyTier = "easy" | "medium" | "hard";
 
@@ -125,9 +128,82 @@ function buildMixedTail(pools: Record<DifficultyTier, number[]>): number[] {
   return tail;
 }
 
+function editDistanceOne(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i] && ++diff > 1) return false;
+  }
+  return diff === 1;
+}
+
+function conflictsNear(
+  order: number[],
+  index: number,
+  wordIndex: number,
+  minGap: number,
+): boolean {
+  const word = ANSWERS[wordIndex]!;
+  const from = Math.max(0, index - minGap + 1);
+  const to = Math.min(order.length - 1, index + minGap - 1);
+  for (let i = from; i <= to; i++) {
+    if (i === index) continue;
+    const other = order[i];
+    if (other == null) continue;
+    if (editDistanceOne(word, ANSWERS[other]!)) return true;
+  }
+  return false;
+}
+
+/**
+ * Keep one-letter-apart answers (e.g. قائدة/فائدة/مائدة) from clustering.
+ * Best-effort: swaps conflicting stages farther apart when possible.
+ */
+function separateNearDuplicates(
+  order: number[],
+  minGap = NEAR_DUPLICATE_MIN_GAP,
+): number[] {
+  const arr = order.slice();
+
+  for (let pass = 0; pass < 3; pass++) {
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < Math.min(arr.length, i + minGap); j++) {
+        const a = arr[i]!;
+        const b = arr[j]!;
+        if (!editDistanceOne(ANSWERS[a]!, ANSWERS[b]!)) continue;
+
+        let swapped = false;
+        for (let k = i + minGap; k < arr.length; k++) {
+          const candidate = arr[k]!;
+          if (conflictsNear(arr, j, candidate, minGap)) continue;
+          if (conflictsNear(arr, k, b, minGap)) continue;
+          arr[j] = candidate;
+          arr[k] = b;
+          swapped = true;
+          break;
+        }
+
+        if (!swapped) {
+          for (let k = 0; k < i - minGap + 1; k++) {
+            const candidate = arr[k]!;
+            if (conflictsNear(arr, j, candidate, minGap)) continue;
+            if (conflictsNear(arr, k, b, minGap)) continue;
+            arr[j] = candidate;
+            arr[k] = b;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return arr;
+}
+
 /**
  * Progressive stage order: easy intro, then a random easy/medium/hard mix
  * so later levels vary instead of ramping up in difficulty.
+ * Near-duplicate words are spaced apart (e.g. قائدة family).
  */
 export function buildStageOrder(length = ANSWERS.length): number[] {
   const tiers = classifyWordsByDifficulty(length);
@@ -142,7 +218,7 @@ export function buildStageOrder(length = ANSWERS.length): number[] {
     hard: tiers.hard.slice(),
   };
 
-  return [...intro, ...buildMixedTail(remaining)];
+  return separateNearDuplicates([...intro, ...buildMixedTail(remaining)]);
 }
 
 /** Fisher–Yates shuffle of answer indices (legacy flat random order). */
