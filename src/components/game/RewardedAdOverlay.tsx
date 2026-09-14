@@ -1,10 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { registerSimulatedAdHandler, type AdResult } from "@/lib/ads/ads";
 import type { RewardedPlacement } from "@/lib/ads/config";
 
 /**
  * In-app rewarded-ad stand-in for web and until AdMob is wired on device.
  * Native builds use real AdMob when the plugin + unit IDs are available.
+ *
+ * Portaled to document.body with a high z-index so it is never trapped under
+ * Radix Dialog overlays (result / settings / etc.).
  */
 export function RewardedAdOverlay() {
   const [open, setOpen] = useState<{
@@ -15,10 +19,12 @@ export function RewardedAdOverlay() {
   } | null>(null);
   const [seconds, setSeconds] = useState(3);
   const [busy, setBusy] = useState(false);
+  const settledRef = useRef(false);
 
   useEffect(() => {
     registerSimulatedAdHandler((opts) => {
       return new Promise<AdResult>((resolve) => {
+        settledRef.current = false;
         setSeconds(3);
         setBusy(false);
         setOpen({ ...opts, resolve });
@@ -34,21 +40,28 @@ export function RewardedAdOverlay() {
     return () => window.clearTimeout(id);
   }, [open, seconds, busy]);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
   const finish = (result: AdResult) => {
+    if (settledRef.current) return;
+    settledRef.current = true;
     const { resolve } = open;
     setOpen(null);
     setBusy(false);
-    resolve(result);
+    // Defer resolve so unmount paints before parent state updates.
+    window.setTimeout(() => resolve(result), 0);
   };
 
-  return (
+  const canClaim = seconds <= 0 && !busy;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-fg/55 p-5 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-fg/55 p-5 backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
       aria-label={open.title}
+      // Capture all pointer events so nothing underneath can steal taps.
+      onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="w-full max-w-sm rounded-2xl bg-bg-elevated p-5 text-center shadow-[var(--shadow-border)]">
         <p className="text-xs font-medium tracking-wide text-muted">إعلان اختياري</p>
@@ -66,8 +79,9 @@ export function RewardedAdOverlay() {
         <div className="mt-5 flex flex-col gap-2">
           <button
             type="button"
-            disabled={seconds > 0 || busy}
+            disabled={!canClaim}
             onClick={() => {
+              if (!canClaim) return;
               setBusy(true);
               finish("rewarded");
             }}
@@ -85,6 +99,7 @@ export function RewardedAdOverlay() {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

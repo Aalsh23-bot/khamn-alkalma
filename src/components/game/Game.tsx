@@ -156,11 +156,21 @@ export function Game() {
           void (async () => {
             if (adBusy) return;
             setAdBusy(true);
+            // Close ResultModal first — Radix modal dialogs trap pointer events
+            // and block the rewarded overlay even when it paints above them.
+            setModal(null);
             try {
               const result = await showRewardedAd("revive");
-              if (result === "rewarded") reviveAfterLoss();
-              else if (result === "dismissed") setToast("شاهِد الإعلان للنهاية لاستعادة المحاولة");
-              else setToast("الإعلان غير متاح الآن");
+              if (result === "rewarded") {
+                reviveAfterLoss();
+              } else {
+                if (result === "dismissed") {
+                  setToast("شاهِد الإعلان للنهاية لاستعادة المحاولة");
+                } else {
+                  setToast("الإعلان غير متاح الآن");
+                }
+                if (useGame.getState().status === "lost") setModal("result");
+              }
             } finally {
               setAdBusy(false);
             }
