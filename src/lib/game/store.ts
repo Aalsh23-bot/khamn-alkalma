@@ -8,10 +8,24 @@ import { MAX_GUESSES, WORD_LENGTH, normalizeWord } from "./normalize";
 import { dailyAnswer, localDateKey, puzzleNumber } from "./daily";
 import { displayWord, isValidGuess, stageAnswer, STAGE_COUNT } from "./words";
 import {
+  applyAchievements,
+  evaluateNewAchievements,
+} from "./achievement-logic";
+import type { AchievementsSave } from "./achievements";
+import {
+  clearChallengeCodeFromUrl,
+  decodeChallenge,
+  encodeChallenge,
+  randomChallengeAnswer,
+  readChallengeCodeFromLocation,
+} from "./challenge";
+import {
+  loadAchievements,
   loadRound,
   loadSettings,
   loadStages,
   loadStats,
+  saveAchievements,
   saveRound,
   saveSettings,
   saveStages,
@@ -46,18 +60,24 @@ export interface GameStore {
   settings: SettingsSave;
   stats: StatsSave;
   stages: StagesSave;
-  modal: "help" | "stats" | "settings" | "result" | "install" | "privacy" | null;
+  achievements: AchievementsSave;
+  challengeCode: string | null;
+  modal: "help" | "stats" | "settings" | "result" | "install" | "privacy" | "badge" | null;
   hydrate: () => void;
   goHome: () => void;
   openStages: () => void;
   startDaily: () => void;
   startStage: (level: number) => void;
+  /** Create or resume a friend challenge; pass code to join a shared link. */
+  startChallenge: (code?: string) => void;
   nextStage: () => void;
   retryStage: () => void;
   /** After a loss: undo last guess (call only after rewarded ad). */
   reviveAfterLoss: () => void;
   /** After a loss on stages: restart level with a different word. */
   retryStageNewWord: () => void;
+  /** Start a brand-new friend challenge (new random word). */
+  newChallenge: () => void;
   typeLetter: (ch: string) => void;
   backspace: () => void;
   submit: () => void;
@@ -65,6 +85,7 @@ export interface GameStore {
   useHint: () => void;
   setToast: (msg: string | null) => void;
   setModal: (modal: GameStore["modal"]) => void;
+  dismissBadge: () => void;
   setHardMode: (on: boolean) => void;
   setSound: (on: boolean) => void;
 }
@@ -84,6 +105,7 @@ function persist(get: () => GameStore) {
       hintUsed: s.hintUsed,
       hintedCols: s.hintedCols,
       stageLevel: s.stageLevel,
+      challengeCode: s.challengeCode ?? undefined,
     });
   } catch {
     /* storage blocked */
@@ -106,6 +128,7 @@ function freshDaily() {
     hintedCols: [] as number[],
     revealing: false,
     shake: false,
+    challengeCode: null as string | null,
   };
 }
 
@@ -125,12 +148,39 @@ function freshStage(level: number, order: number[]) {
     hintedCols: [] as number[],
     revealing: false,
     shake: false,
+    challengeCode: null as string | null,
+  };
+}
+
+function freshChallenge(answer: string, code: string) {
+  const dateKey = localDateKey();
+  return {
+    mode: "challenge" as const,
+    dateKey,
+    puzzleNum: 0,
+    stageLevel: 0,
+    answer,
+    guesses: [] as string[],
+    evaluations: [] as LetterStatus[][],
+    current: "",
+    status: "playing" as const,
+    hintUsed: false,
+    hintedCols: [] as number[],
+    revealing: false,
+    shake: false,
+    challengeCode: code,
   };
 }
 
 function roundFromSave(
   saved: NonNullable<ReturnType<typeof loadRound>>,
-  extras: { mode: Mode; puzzleNum: number; stageLevel: number; dateKey: string },
+  extras: {
+    mode: Mode;
+    puzzleNum: number;
+    stageLevel: number;
+    dateKey: string;
+    challengeCode?: string | null;
+  },
 ) {
   return {
     ...extras,
@@ -143,7 +193,19 @@ function roundFromSave(
     hintedCols: saved.hintedCols ?? [],
     revealing: false,
     shake: false,
+    challengeCode: extras.challengeCode ?? saved.challengeCode ?? null,
   };
+}
+
+function unlockAchievements(
+  current: AchievementsSave,
+  ctx: Parameters<typeof evaluateNewAchievements>[1],
+): AchievementsSave {
+  const newly = evaluateNewAchievements(current, ctx);
+  if (newly.length === 0) return current;
+  const next = applyAchievements(current, newly);
+  saveAchievements(next);
+  return next;
 }
 
 export const useGame = create<GameStore>((set, get) => ({
@@ -154,6 +216,7 @@ export const useGame = create<GameStore>((set, get) => ({
   settings: loadSettings(),
   stats: loadStats(),
   stages: loadStages(),
+  achievements: loadAchievements(),
   modal: null,
 
   hydrate: () => {
@@ -161,14 +224,40 @@ export const useGame = create<GameStore>((set, get) => ({
     const settings = loadSettings();
     const stats = loadStats();
     const stages = loadStages();
+    const achievements = loadAchievements();
     sfx.setSoundEnabled(settings.sound);
+
+    const inviteCode = readChallengeCodeFromLocation();
+    if (inviteCode) {
+      clearChallengeCodeFromUrl();
+      const answer = decodeChallenge(inviteCode);
+      if (answer) {
+        set({
+          hydrated: true,
+          settings,
+          stats,
+          stages,
+          achievements,
+          screen: "play",
+          ...freshChallenge(answer, inviteCode),
+          modal: null,
+          toast: "تحدّي الأصدقاء — نفس الكلمة",
+          revealing: false,
+          shake: false,
+        });
+        persist(get);
+        return;
+      }
+    }
+
     set({
       hydrated: true,
       screen: "home",
       settings,
       stats,
       stages,
-      modal: null,
+      achievements,
+      modal: achievements.pending.length ? "badge" : null,
       toast: null,
       revealing: false,
       shake: false,
@@ -178,7 +267,14 @@ export const useGame = create<GameStore>((set, get) => ({
   goHome: () => {
     commitPendingDailyLoss(get);
     persist(get);
-    set({ screen: "home", modal: null, toast: null, revealing: false, shake: false });
+    const pending = get().achievements.pending.length > 0;
+    set({
+      screen: "home",
+      modal: pending ? "badge" : null,
+      toast: null,
+      revealing: false,
+      shake: false,
+    });
   },
 
   openStages: () => {
@@ -208,6 +304,61 @@ export const useGame = create<GameStore>((set, get) => ({
       return;
     }
     set({ screen: "play", ...freshDaily(), modal: null, toast: null });
+    persist(get);
+  },
+
+  startChallenge: (code) => {
+    commitPendingDailyLoss(get);
+    persist(get);
+
+    if (code) {
+      const answer = decodeChallenge(code);
+      if (!answer) {
+        set({ toast: "رابط التحدّي غير صالح", screen: "home", modal: null });
+        return;
+      }
+      set({
+        screen: "play",
+        ...freshChallenge(answer, code),
+        modal: null,
+        toast: "تحدّي الأصدقاء — نفس الكلمة",
+      });
+      persist(get);
+      return;
+    }
+
+    const saved = loadRound("challenge");
+    if (saved?.answer && saved.status === "playing" && saved.challengeCode) {
+      set({
+        screen: "play",
+        ...roundFromSave(saved, {
+          mode: "challenge",
+          dateKey: saved.dateKey,
+          puzzleNum: 0,
+          stageLevel: 0,
+          challengeCode: saved.challengeCode,
+        }),
+        modal: null,
+        toast: null,
+        revealing: false,
+      });
+      return;
+    }
+
+    get().newChallenge();
+  },
+
+  newChallenge: () => {
+    commitPendingDailyLoss(get);
+    persist(get);
+    const answer = randomChallengeAnswer();
+    const code = encodeChallenge(answer);
+    set({
+      screen: "play",
+      ...freshChallenge(answer, code),
+      modal: null,
+      toast: "تحدّي جديد — شارك الرابط مع أصدقائك",
+    });
     persist(get);
   },
 
@@ -390,6 +541,7 @@ export const useGame = create<GameStore>((set, get) => ({
           stats.lastDailyDate && dayDiff(stats.lastDailyDate, s.dateKey) === 1
             ? stats.currentStreak + 1
             : 1;
+        const dailyWins = { ...stats.dailyWins, [s.dateKey]: true as const };
         stats = {
           ...stats,
           played: stats.played + 1,
@@ -399,6 +551,7 @@ export const useGame = create<GameStore>((set, get) => ({
           distribution: dist,
           lastDailyDate: s.dateKey,
           lastDailyWon: true,
+          dailyWins,
         };
         saveStats(stats);
       }
@@ -418,10 +571,24 @@ export const useGame = create<GameStore>((set, get) => ({
       if (won) sfx.sfxWin();
       else if (lost) sfx.sfxLose();
       const status = won ? "won" : lost ? "lost" : "playing";
+
+      let achievements = s.achievements;
+      if (won || lost) {
+        achievements = unlockAchievements(s.achievements, {
+          stats,
+          stages,
+          won: !!won,
+          guessCount: s.guesses.length,
+          stageLevel: s.mode === "stages" ? Math.max(s.stageLevel, stages.unlocked) : stages.unlocked,
+          mode: s.mode,
+        });
+      }
+
       set({
         status,
         stats,
         stages,
+        achievements,
         modal: won || lost ? "result" : null,
       });
       persist(get);
@@ -475,7 +642,26 @@ export const useGame = create<GameStore>((set, get) => ({
       set({ modal, settings });
       return;
     }
+    // When closing result, surface any pending badge unlocks.
+    if (modal === null && get().modal === "result" && get().achievements.pending.length) {
+      set({ modal: "badge" });
+      return;
+    }
     set({ modal });
+  },
+  dismissBadge: () => {
+    const a = get().achievements;
+    if (a.pending.length === 0) {
+      set({ modal: null });
+      return;
+    }
+    const pending = a.pending.slice(1);
+    const next = { ...a, pending };
+    saveAchievements(next);
+    set({
+      achievements: next,
+      modal: pending.length ? "badge" : null,
+    });
   },
   setHardMode: (on) => {
     const settings = { ...get().settings, hardMode: on };
@@ -506,6 +692,7 @@ function commitPendingDailyLoss(get: () => GameStore) {
     distribution: stats.distribution.slice(),
     lastDailyDate: s.dateKey,
     lastDailyWon: false,
+    dailyWins: { ...(stats.dailyWins ?? {}) },
   };
   saveStats(next);
   useGame.setState({ stats: next });

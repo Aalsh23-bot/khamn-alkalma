@@ -5,6 +5,7 @@ import { HomeScreen } from "./HomeScreen";
 import { Keyboard } from "./Keyboard";
 import { StagesSelect } from "./StagesSelect";
 import {
+  BadgeModal,
   HelpModal,
   InstallModal,
   PrivacyModal,
@@ -13,6 +14,7 @@ import {
   StatsModal,
 } from "./Modals";
 import { unlockAudio } from "@/lib/game/audio";
+import { achievementById } from "@/lib/game/achievements";
 import { buildKeyMap } from "@/lib/game/evaluate";
 import { isArabicLetter } from "@/lib/game/normalize";
 import { useGame } from "@/lib/game/store";
@@ -31,6 +33,8 @@ export function Game() {
   const openStages = useGame((s) => s.openStages);
   const startDaily = useGame((s) => s.startDaily);
   const startStage = useGame((s) => s.startStage);
+  const startChallenge = useGame((s) => s.startChallenge);
+  const newChallenge = useGame((s) => s.newChallenge);
   const nextStage = useGame((s) => s.nextStage);
   const retryStage = useGame((s) => s.retryStage);
   const reviveAfterLoss = useGame((s) => s.reviveAfterLoss);
@@ -49,6 +53,8 @@ export function Game() {
   const settings = useGame((s) => s.settings);
   const stats = useGame((s) => s.stats);
   const stages = useGame((s) => s.stages);
+  const achievements = useGame((s) => s.achievements);
+  const challengeCode = useGame((s) => s.challengeCode);
   const puzzleNum = useGame((s) => s.puzzleNum);
   const dateKey = useGame((s) => s.dateKey);
   const typeLetter = useGame((s) => s.typeLetter);
@@ -58,10 +64,15 @@ export function Game() {
   const useHint = useGame((s) => s.useHint);
   const setToast = useGame((s) => s.setToast);
   const setModal = useGame((s) => s.setModal);
+  const dismissBadge = useGame((s) => s.dismissBadge);
   const setHardMode = useGame((s) => s.setHardMode);
   const setSound = useGame((s) => s.setSound);
 
   const [adBusy, setAdBusy] = useState(false);
+
+  const pendingBadge = achievements.pending[0]
+    ? achievementById(achievements.pending[0])
+    : null;
 
   const keyMap = useMemo(
     () => buildKeyMap(guesses, evaluations, hintedCols, answer),
@@ -128,7 +139,12 @@ export function Game() {
   const modals = (
     <>
       <HelpModal open={modal === "help"} onClose={() => setModal(null)} />
-      <StatsModal open={modal === "stats"} onClose={() => setModal(null)} stats={stats} />
+      <StatsModal
+        open={modal === "stats"}
+        onClose={() => setModal(null)}
+        stats={stats}
+        achievements={achievements}
+      />
       <SettingsModal
         open={modal === "settings"}
         onClose={() => setModal(null)}
@@ -151,6 +167,7 @@ export function Game() {
         dateKey={dateKey}
         stageLevel={stageLevel}
         hardMode={settings.hardMode}
+        challengeCode={challengeCode}
         adBusy={adBusy}
         onWatchAdRevive={() => {
           void (async () => {
@@ -177,12 +194,15 @@ export function Game() {
           })();
         }}
         onRetryNewWord={() => retryStageNewWord()}
+        onNewChallenge={() => newChallenge()}
         onAgain={() => {
           if (mode === "stages") {
             if (status === "won") {
               if (stageLevel >= STAGE_COUNT) openStages();
               else nextStage();
             } else retryStageNewWord();
+          } else if (mode === "challenge") {
+            newChallenge();
           } else {
             goHome();
           }
@@ -190,6 +210,12 @@ export function Game() {
         onMap={openStages}
         onHome={goHome}
         onStats={() => setModal("stats")}
+      />
+      <BadgeModal
+        open={modal === "badge" && Boolean(pendingBadge)}
+        title={pendingBadge?.title ?? ""}
+        hint={pendingBadge?.hint ?? ""}
+        onClose={dismissBadge}
       />
       <InstallModal open={modal === "install"} onClose={() => setModal(null)} />
       <PrivacyModal open={modal === "privacy"} onClose={() => setModal(null)} />
@@ -208,6 +234,7 @@ export function Game() {
           stages={stages}
           onDaily={startDaily}
           onStages={openStages}
+          onChallenge={() => startChallenge()}
           onHelp={() => setModal("help")}
           onSettings={() => setModal("settings")}
         />

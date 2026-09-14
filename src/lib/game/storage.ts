@@ -1,14 +1,21 @@
 import type { LetterStatus } from "./evaluate";
 import {
+  defaultAchievements,
+  type AchievementsSave,
+  type AchievementId,
+} from "./achievements";
+import {
   buildStageOrder,
   isValidStageOrder,
   STAGE_COUNT,
   STAGE_ORDER_SCHEME,
 } from "./words";
 
+export type { AchievementsSave, AchievementId };
+
 const VERSION = 3;
 
-export type Mode = "daily" | "stages";
+export type Mode = "daily" | "stages" | "challenge";
 export type Screen = "home" | "stages" | "play";
 
 export interface RoundSave {
@@ -22,6 +29,8 @@ export interface RoundSave {
   hintUsed: boolean;
   hintedCols: number[];
   stageLevel?: number;
+  /** Opaque code for friend-challenge rounds */
+  challengeCode?: string;
 }
 
 export interface StatsSave {
@@ -33,6 +42,8 @@ export interface StatsSave {
   distribution: number[];
   lastDailyDate: string | null;
   lastDailyWon: boolean;
+  /** YYYY-MM-DD keys for daily wins (calendar) */
+  dailyWins: Record<string, true>;
 }
 
 export interface SettingsSave {
@@ -61,6 +72,7 @@ export const defaultStats = (): StatsSave => ({
   distribution: [0, 0, 0, 0, 0, 0],
   lastDailyDate: null,
   lastDailyWon: false,
+  dailyWins: {},
 });
 
 export const defaultSettings = (): SettingsSave => ({
@@ -110,11 +122,42 @@ export function saveRound(mode: Mode, round: RoundSave) {
 }
 
 export function loadStats(): StatsSave {
-  return read("khamsa:stats", defaultStats());
+  const stats = read("khamsa:stats", defaultStats());
+  const dailyWins: Record<string, true> = { ...(stats.dailyWins ?? {}) };
+  // Backfill last known daily win into the calendar map.
+  if (stats.lastDailyWon && stats.lastDailyDate) {
+    dailyWins[stats.lastDailyDate] = true;
+  }
+  return {
+    ...defaultStats(),
+    ...stats,
+    distribution: Array.isArray(stats.distribution)
+      ? stats.distribution
+      : defaultStats().distribution,
+    dailyWins,
+  };
 }
 
 export function saveStats(stats: StatsSave) {
-  write("khamsa:stats", { ...stats, version: VERSION });
+  write("khamsa:stats", {
+    ...stats,
+    version: VERSION,
+    dailyWins: stats.dailyWins ?? {},
+  });
+}
+
+export function loadAchievements(): AchievementsSave {
+  const data = read<AchievementsSave>("khamsa:achievements", defaultAchievements());
+  return {
+    ...defaultAchievements(),
+    ...data,
+    unlocked: data.unlocked ?? {},
+    pending: Array.isArray(data.pending) ? data.pending : [],
+  };
+}
+
+export function saveAchievements(data: AchievementsSave) {
+  write("khamsa:achievements", data);
 }
 
 export function loadSettings(): SettingsSave {

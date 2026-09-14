@@ -68,7 +68,7 @@ export function Header({
 
       <div className="flex min-w-0 flex-1 flex-col items-center">
         <h1 className="font-display text-[1.35rem] font-semibold leading-none tracking-tight text-fg">
-          {mode === "daily" ? "كلمة اليوم" : `المرحلة ${stageLevel}`}
+          {mode === "daily" ? "كلمة اليوم" : mode === "challenge" ? "تحدّي الأصدقاء" : `المرحلة ${stageLevel}`}
         </h1>
       </div>
 

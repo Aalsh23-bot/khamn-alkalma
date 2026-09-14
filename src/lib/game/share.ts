@@ -1,5 +1,6 @@
 import type { LetterStatus } from "./evaluate";
 import { formatArabicDate } from "./daily";
+import { challengeAbsoluteUrl } from "./challenge";
 import { isNativeApp, nativeShare } from "@/lib/native";
 import { APP_NAME } from "./brand";
 import type { Mode } from "./storage";
@@ -19,6 +20,7 @@ export function shareText(opts: {
   won: boolean;
   hardMode: boolean;
   mode?: Mode;
+  challengeCode?: string;
 }): string {
   const score = opts.won ? String(opts.guesses) : "X";
   const star = opts.hardMode ? "*" : "";
@@ -30,8 +32,14 @@ export function shareText(opts: {
   const label =
     opts.mode === "stages"
       ? `${APP_NAME} · مرحلة ${opts.puzzleNum}${star} ${score}/${opts.max}`
-      : `${APP_NAME} ${opts.puzzleNum}${star} ${score}/${opts.max}`;
-  return [label, formatArabicDate(opts.dateKey), "", `${ltr}${rows}${pdf}`].join("\n");
+      : opts.mode === "challenge"
+        ? `${APP_NAME} · تحدّي الأصدقاء${star} ${score}/${opts.max}`
+        : `${APP_NAME} ${opts.puzzleNum}${star} ${score}/${opts.max}`;
+  const lines = [label, formatArabicDate(opts.dateKey), "", `${ltr}${rows}${pdf}`];
+  if (opts.mode === "challenge" && opts.challengeCode) {
+    lines.push("", challengeAbsoluteUrl(opts.challengeCode));
+  }
+  return lines.join("\n");
 }
 
 export async function shareOrCopy(text: string): Promise<"shared" | "copied"> {

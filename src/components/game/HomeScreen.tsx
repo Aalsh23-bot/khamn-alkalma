@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CalendarDays, HelpCircle, Layers, Settings2 } from "lucide-react";
+import { CalendarDays, HelpCircle, Layers, Settings2, Users } from "lucide-react";
 import { APP_NAME } from "@/lib/game/brand";
 import { formatArabicDate, localDateKey } from "@/lib/game/daily";
 import { STAGE_COUNT } from "@/lib/game/words";
@@ -10,6 +10,7 @@ export function HomeScreen({
   stages,
   onDaily,
   onStages,
+  onChallenge,
   onHelp,
   onSettings,
 }: {
@@ -17,6 +18,7 @@ export function HomeScreen({
   stages: StagesSave;
   onDaily: () => void;
   onStages: () => void;
+  onChallenge: () => void;
   onHelp: () => void;
   onSettings: () => void;
 }) {
@@ -25,6 +27,8 @@ export function HomeScreen({
   const dailyToday = daily && daily.dateKey === today;
   const dailyDone = dailyToday && daily.status !== "playing";
   const dailyMid = dailyToday && daily.status === "playing" && daily.guesses.length > 0;
+  const challenge = loadRound("challenge");
+  const challengeMid = challenge && challenge.status === "playing" && challenge.guesses.length > 0;
   const done = completedCount(stages);
   const current = Math.min(stages.unlocked, STAGE_COUNT);
 
@@ -102,6 +106,17 @@ export function HomeScreen({
             }
             meta={done > 0 ? `أُنجز ${done}` : "ابدأ الآن"}
             onClick={onStages}
+          />
+          <ModeCard
+            icon={<Users className="size-6" strokeWidth={1.8} />}
+            title="تحدّي الأصدقاء"
+            hint={
+              challengeMid
+                ? "متابعة التحدّي الحالي"
+                : "كلمة عشوائية مشتركة عبر رابط"
+            }
+            meta={challengeMid ? "متابعة" : "أنشئ تحدّي"}
+            onClick={onChallenge}
           />
         </div>
       </div>

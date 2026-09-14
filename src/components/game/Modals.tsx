@@ -7,11 +7,14 @@ import {
   formatCountdown,
   msUntilTomorrow,
 } from "@/lib/game/daily";
+import { ACHIEVEMENTS, type AchievementsSave } from "@/lib/game/achievements";
+import { challengeInviteText } from "@/lib/game/challenge";
 import { shareOrCopy, shareText } from "@/lib/game/share";
 import { solutionLabel, type Mode } from "@/lib/game/store";
 import { STAGE_COUNT } from "@/lib/game/words";
 import type { SettingsSave, StatsSave } from "@/lib/game/storage";
 import { cn } from "@/lib/utils";
+import { WinCalendar } from "./WinCalendar";
 
 function Shell({
   open,
@@ -124,15 +127,17 @@ export function StatsModal({
   open,
   onClose,
   stats,
+  achievements,
 }: {
   open: boolean;
   onClose: () => void;
   stats: StatsSave;
+  achievements: AchievementsSave;
 }) {
   const winPct = stats.played ? Math.round((stats.wins / stats.played) * 100) : 0;
   const maxBar = Math.max(1, ...stats.distribution);
   return (
-    <Shell open={open} onClose={onClose} title="الإحصائيات">
+    <Shell open={open} onClose={onClose} title="الإحصائيات" wide>
       <div className="grid grid-cols-4 gap-2 text-center">
         {[
           [stats.played, "لُعبت"],
@@ -164,6 +169,30 @@ export function StatsModal({
             </div>
           </div>
         ))}
+      </div>
+
+      <WinCalendar dailyWins={stats.dailyWins ?? {}} currentStreak={stats.currentStreak} />
+
+      <p className="mt-5 mb-2 text-sm font-medium">الشارات</p>
+      <div className="grid grid-cols-2 gap-2">
+        {ACHIEVEMENTS.map((a) => {
+          const unlocked = Boolean(achievements.unlocked[a.id]);
+          return (
+            <div
+              key={a.id}
+              className={cn(
+                "rounded-xl px-3 py-3 text-right",
+                unlocked ? "bg-accent/10" : "bg-bg opacity-55",
+              )}
+            >
+              <p className={cn("text-sm font-semibold", unlocked ? "text-accent" : "text-fg")}>
+                {unlocked ? "★ " : "☆ "}
+                {a.title}
+              </p>
+              <p className="mt-1 text-[11px] leading-4 text-muted">{a.hint}</p>
+            </div>
+          );
+        })}
       </div>
     </Shell>
   );
@@ -277,12 +306,14 @@ export function ResultModal({
   dateKey,
   stageLevel,
   hardMode,
+  challengeCode,
   onAgain,
   onMap,
   onHome,
   onStats,
   onWatchAdRevive,
   onRetryNewWord,
+  onNewChallenge,
   adBusy,
 }: {
   open: boolean;
@@ -296,12 +327,14 @@ export function ResultModal({
   dateKey: string;
   stageLevel: number;
   hardMode: boolean;
+  challengeCode?: string | null;
   onAgain: () => void;
   onMap: () => void;
   onHome: () => void;
   onStats: () => void;
   onWatchAdRevive?: () => void;
   onRetryNewWord?: () => void;
+  onNewChallenge?: () => void;
   adBusy?: boolean;
 }) {
   const won = status === "won";
@@ -325,12 +358,23 @@ export function ResultModal({
       won,
       hardMode,
       mode,
+      challengeCode: challengeCode ?? undefined,
     });
     try {
-      const how = await shareOrCopy(text);
+      await shareOrCopy(text);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
-      void how;
+    } catch {
+      /* cancelled */
+    }
+  }
+
+  async function onShareChallengeLink() {
+    if (!challengeCode) return;
+    try {
+      await shareOrCopy(challengeInviteText(challengeCode));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
     } catch {
       /* cancelled */
     }
@@ -343,7 +387,9 @@ export function ResultModal({
           ? "الخريطة"
           : "المرحلة التالية"
         : "حاول مجدداً"
-      : "الرئيسية";
+      : mode === "challenge"
+        ? "تحدّي جديد"
+        : "الرئيسية";
 
   return (
     <Shell open={open} onClose={onClose} title={won ? "أحسنت" : "انتهت المحاولات"}>
@@ -357,7 +403,11 @@ export function ResultModal({
       ) : (
         <p className="text-center text-sm leading-6 text-muted">
           خلصت المحاولات. تقدر تشوف إعلاناً وتعيد آخر محاولة،
-          {mode === "stages" ? " أو تعيد المرحلة بكلمة جديدة." : " أو ترجع للرئيسية."}
+          {mode === "stages"
+            ? " أو تعيد المرحلة بكلمة جديدة."
+            : mode === "challenge"
+              ? " أو تنشئ تحدّياً جديداً."
+              : " أو ترجع للرئيسية."}
         </p>
       )}
       <div className="mx-auto mt-4 flex flex-col items-center gap-1" dir="rtl">
@@ -410,6 +460,17 @@ export function ResultModal({
               أعد المرحلة بكلمة جديدة
             </button>
           )}
+          {mode === "challenge" && challengeCode && (
+            <button
+              type="button"
+              disabled={adBusy}
+              onClick={() => void onShareChallengeLink()}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-key text-sm font-medium text-fg disabled:opacity-50"
+            >
+              <Share2 className="size-4" />
+              شارك رابط التحدّي
+            </button>
+          )}
           <button
             type="button"
             disabled={adBusy}
@@ -422,27 +483,41 @@ export function ResultModal({
           <button
             type="button"
             disabled={adBusy}
-            onClick={mode === "stages" ? onMap : onHome}
+            onClick={
+              mode === "stages" ? onMap : mode === "challenge" ? onNewChallenge : onHome
+            }
             className="flex h-10 w-full items-center justify-center text-sm text-muted"
           >
-            {mode === "stages" ? "الخريطة" : "الرئيسية"}
+            {mode === "stages" ? "الخريطة" : mode === "challenge" ? "تحدّي جديد" : "الرئيسية"}
           </button>
         </div>
       ) : (
         <>
-          <div className="mt-5 flex gap-2">
+          {mode === "challenge" && challengeCode && (
+            <button
+              type="button"
+              onClick={() => void onShareChallengeLink()}
+              className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-accent-fg"
+            >
+              <Share2 className="size-4" />
+              {copied ? "تم النسخ" : "شارك التحدّي مع صديق"}
+            </button>
+          )}
+          <div className={mode === "challenge" ? "mt-2 flex gap-2" : "mt-5 flex gap-2"}>
             <button
               type="button"
               onClick={onShare}
-              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-accent-fg"
+              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-key text-sm font-medium text-fg"
             >
               <Share2 className="size-4" />
               {copied ? "تم النسخ" : "مشاركة"}
             </button>
             <button
               type="button"
-              onClick={onAgain}
-              className="flex h-12 flex-1 items-center justify-center rounded-xl bg-key text-sm font-medium text-fg"
+              onClick={
+                mode === "challenge" ? onNewChallenge : onAgain
+              }
+              className="flex h-12 flex-1 items-center justify-center rounded-xl bg-fg text-sm font-semibold text-bg"
             >
               {againLabel}
             </button>
@@ -454,7 +529,7 @@ export function ResultModal({
           >
             {mode === "stages" ? "الخريطة" : "الإحصائيات"}
           </button>
-          {mode === "daily" && (
+          {(mode === "daily" || mode === "challenge") && (
             <button
               type="button"
               onClick={onHome}
@@ -465,6 +540,35 @@ export function ResultModal({
           )}
         </>
       )}
+    </Shell>
+  );
+}
+
+export function BadgeModal({
+  open,
+  title,
+  hint,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  hint: string;
+  onClose: () => void;
+}) {
+  return (
+    <Shell open={open} onClose={onClose} title="شارة جديدة">
+      <div className="py-4 text-center">
+        <p className="font-display text-3xl font-semibold text-accent">★</p>
+        <p className="mt-3 font-display text-2xl font-semibold">{title}</p>
+        <p className="mt-2 text-sm text-muted">{hint}</p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-6 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg"
+        >
+          رائع
+        </button>
+      </div>
     </Shell>
   );
 }
