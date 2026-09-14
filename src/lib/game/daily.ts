@@ -1,6 +1,16 @@
 import { ANSWERS } from "./words";
+import { WORD_TIERS } from "./word-tiers";
 
 export const EPOCH = { y: 2026, m: 8, d: 29 };
+
+/** Daily puzzle uses familiar everyday words only (usage tier: common). */
+const DAILY_POOL: string[] = ANSWERS.filter(
+  (w) => (WORD_TIERS[w] ?? "familiar") === "common",
+);
+
+export function dailyPool(): readonly string[] {
+  return DAILY_POOL.length > 0 ? DAILY_POOL : ANSWERS;
+}
 
 export function localDateKey(d = new Date()): string {
   const y = d.getFullYear();
@@ -17,9 +27,10 @@ export function puzzleNumber(dateKey: string): number {
 }
 
 export function dailyAnswer(dateKey: string): string {
+  const pool = dailyPool();
   const n = puzzleNumber(dateKey);
-  const idx = ((n - 1) % ANSWERS.length + ANSWERS.length) % ANSWERS.length;
-  return ANSWERS[idx]!;
+  const idx = ((n - 1) % pool.length + pool.length) % pool.length;
+  return pool[idx]!;
 }
 
 const MONTHS = [

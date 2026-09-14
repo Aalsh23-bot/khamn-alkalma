@@ -34,7 +34,7 @@ export function displayWord(norm: string): string {
 export const STAGE_COUNT = ANSWERS.length;
 
 /** Saved stage orders with this scheme start easy, then mix difficulties randomly. */
-export const STAGE_ORDER_SCHEME = "progressive-v7";
+export const STAGE_ORDER_SCHEME = "progressive-v9";
 
 /** First N stages draw from the easiest word pool only. */
 export const INTRO_EASY_STAGES = 20;
@@ -68,11 +68,12 @@ function classifyWordsByDifficulty(_length = ANSWERS.length): Record<DifficultyT
 function pickWeightedPool(
   pools: Record<DifficultyTier, number[]>,
 ): DifficultyTier | null {
-  const weights: { tier: DifficultyTier; weight: number }[] = [
+  const candidates: { tier: DifficultyTier; weight: number }[] = [
     { tier: "easy", weight: pools.easy.length ? 4 : 0 },
     { tier: "medium", weight: pools.medium.length ? 3 : 0 },
     { tier: "hard", weight: pools.hard.length ? 3 : 0 },
-  ].filter((entry) => entry.weight > 0);
+  ];
+  const weights = candidates.filter((entry) => entry.weight > 0);
 
   if (weights.length === 0) return null;
 
