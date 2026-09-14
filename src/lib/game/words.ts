@@ -33,7 +33,7 @@ export function displayWord(norm: string): string {
 export const STAGE_COUNT = ANSWERS.length;
 
 /** Saved stage orders with this scheme start easy, then mix difficulties randomly. */
-export const STAGE_ORDER_SCHEME = "progressive-v2";
+export const STAGE_ORDER_SCHEME = "progressive-v3";
 
 /** First N stages draw from the easiest word pool only. */
 export const INTRO_EASY_STAGES = 20;
