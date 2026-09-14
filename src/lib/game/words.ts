@@ -32,16 +32,122 @@ export function displayWord(norm: string): string {
 /** One stage per answer word — no repeats within a campaign. */
 export const STAGE_COUNT = ANSWERS.length;
 
-/** Fisher–Yates shuffle of answer indices (unique random order). */
-export function shuffleStageOrder(length = ANSWERS.length): number[] {
-  const order = Array.from({ length }, (_, i) => i);
-  for (let i = order.length - 1; i > 0; i--) {
+/** Saved stage orders with this scheme start easy, then mix difficulties randomly. */
+export const STAGE_ORDER_SCHEME = "progressive-v1";
+
+/** First N stages draw from the easiest word pool only. */
+export const INTRO_EASY_STAGES = 20;
+
+type DifficultyTier = "easy" | "medium" | "hard";
+
+const RARE_LETTERS = new Set("ظذزضثصط".split(""));
+const UNCOMMON_LETTERS = new Set("قغخحجش".split(""));
+
+function fisherYates<T>(items: T[]): T[] {
+  const arr = items.slice();
+  for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    const a = order[i]!;
-    order[i] = order[j]!;
-    order[j] = a;
+    const tmp = arr[i]!;
+    arr[i] = arr[j]!;
+    arr[j] = tmp;
   }
-  return order;
+  return arr;
+}
+
+function wordDifficultyScore(word: string): number {
+  let score = 0;
+  const chars = [...word];
+  const unique = new Set(chars);
+
+  for (const ch of chars) {
+    if (RARE_LETTERS.has(ch)) score += 3;
+    else if (UNCOMMON_LETTERS.has(ch)) score += 1.5;
+  }
+
+  score += unique.size * 0.4;
+  if (unique.size < chars.length) score -= 0.8;
+
+  if (word.endsWith("ه")) score -= 0.5;
+  if (word.includes("ى")) score += 0.5;
+
+  return score;
+}
+
+function classifyWordsByDifficulty(length = ANSWERS.length): Record<DifficultyTier, number[]> {
+  const scored = Array.from({ length }, (_, index) => ({
+    index,
+    score: wordDifficultyScore(ANSWERS[index]!),
+  })).sort((a, b) => a.score - b.score);
+
+  const third = Math.floor(length / 3);
+  const easy = scored.slice(0, third).map((item) => item.index);
+  const medium = scored.slice(third, third * 2).map((item) => item.index);
+  const hard = scored.slice(third * 2).map((item) => item.index);
+
+  return { easy, medium, hard };
+}
+
+function pickWeightedPool(
+  pools: Record<DifficultyTier, number[]>,
+): DifficultyTier | null {
+  const weights: { tier: DifficultyTier; weight: number }[] = [
+    { tier: "easy", weight: pools.easy.length ? 4 : 0 },
+    { tier: "medium", weight: pools.medium.length ? 3 : 0 },
+    { tier: "hard", weight: pools.hard.length ? 3 : 0 },
+  ].filter((entry) => entry.weight > 0);
+
+  if (weights.length === 0) return null;
+
+  const total = weights.reduce((sum, entry) => sum + entry.weight, 0);
+  let roll = Math.random() * total;
+  for (const entry of weights) {
+    roll -= entry.weight;
+    if (roll <= 0) return entry.tier;
+  }
+  return weights[weights.length - 1]!.tier;
+}
+
+function buildMixedTail(pools: Record<DifficultyTier, number[]>): number[] {
+  const tail: number[] = [];
+  const working: Record<DifficultyTier, number[]> = {
+    easy: fisherYates(pools.easy),
+    medium: fisherYates(pools.medium),
+    hard: fisherYates(pools.hard),
+  };
+
+  while (working.easy.length || working.medium.length || working.hard.length) {
+    const tier = pickWeightedPool(working);
+    if (!tier) break;
+    const next = working[tier].pop();
+    if (next != null) tail.push(next);
+  }
+
+  return tail;
+}
+
+/**
+ * Progressive stage order: easy intro, then a random easy/medium/hard mix
+ * so later levels vary instead of ramping up in difficulty.
+ */
+export function buildStageOrder(length = ANSWERS.length): number[] {
+  const tiers = classifyWordsByDifficulty(length);
+  const introCount = Math.min(INTRO_EASY_STAGES, tiers.easy.length, length);
+
+  const intro = fisherYates(tiers.easy).slice(0, introCount);
+  const introSet = new Set(intro);
+
+  const remaining: Record<DifficultyTier, number[]> = {
+    easy: tiers.easy.filter((idx) => !introSet.has(idx)),
+    medium: tiers.medium.slice(),
+    hard: tiers.hard.slice(),
+  };
+
+  return [...intro, ...buildMixedTail(remaining)];
+}
+
+/** Fisher–Yates shuffle of answer indices (legacy flat random order). */
+export function shuffleStageOrder(length = ANSWERS.length): number[] {
+  return fisherYates(Array.from({ length }, (_, i) => i));
 }
 
 export function isValidStageOrder(
@@ -59,7 +165,7 @@ export function isValidStageOrder(
   return seen.size === length;
 }
 
-/** Stage answers come from a saved random permutation — never sequential, never repeats. */
+/** Stage answers come from a saved permutation — never sequential, never repeats. */
 export function stageAnswer(level: number, order: number[]): string {
   const idx = order[level - 1];
   if (idx == null || idx < 0 || idx >= ANSWERS.length) {

@@ -1,5 +1,10 @@
 import type { LetterStatus } from "./evaluate";
-import { isValidStageOrder, shuffleStageOrder, STAGE_COUNT } from "./words";
+import {
+  buildStageOrder,
+  isValidStageOrder,
+  STAGE_COUNT,
+  STAGE_ORDER_SCHEME,
+} from "./words";
 
 const VERSION = 3;
 
@@ -43,6 +48,8 @@ export interface StagesSave {
   completed: Record<string, { guesses: number }>;
   /** Random unique answer-index order for stages 1..STAGE_COUNT */
   order: number[];
+  /** progressive-v1 = easy intro then mixed difficulties */
+  orderScheme?: string;
 }
 
 export const defaultStats = (): StatsSave => ({
@@ -67,7 +74,8 @@ export const defaultStages = (): StagesSave => ({
   version: VERSION,
   unlocked: 1,
   completed: {},
-  order: shuffleStageOrder(STAGE_COUNT),
+  order: buildStageOrder(STAGE_COUNT),
+  orderScheme: STAGE_ORDER_SCHEME,
 });
 
 function read<T>(key: string, fallback: T): T {
@@ -153,15 +161,16 @@ export function loadStages(): StagesSave {
       return fresh;
     }
 
-    const needsOrder = !isValidStageOrder(parsed.order, STAGE_COUNT);
-    const order = needsOrder
-      ? shuffleStageOrder(STAGE_COUNT)
-      : (parsed.order as number[]);
+    const needsOrder =
+      !isValidStageOrder(parsed.order, STAGE_COUNT) ||
+      parsed.orderScheme !== STAGE_ORDER_SCHEME;
+    const order = needsOrder ? buildStageOrder(STAGE_COUNT) : (parsed.order as number[]);
     const stages: StagesSave = {
       version: VERSION,
       unlocked: Math.min(STAGE_COUNT, Math.max(1, parsed.unlocked || 1)),
       completed: parsed.completed ?? {},
       order,
+      orderScheme: STAGE_ORDER_SCHEME,
     };
 
     if (needsOrder) saveStages(stages);
@@ -176,12 +185,13 @@ export function loadStages(): StagesSave {
 export function saveStages(stages: StagesSave) {
   const order = isValidStageOrder(stages.order, STAGE_COUNT)
     ? stages.order
-    : shuffleStageOrder(STAGE_COUNT);
+    : buildStageOrder(STAGE_COUNT);
   write("khamsa:stages", {
     ...stages,
     version: VERSION,
     unlocked: Math.min(STAGE_COUNT, Math.max(1, stages.unlocked || 1)),
     order,
+    orderScheme: STAGE_ORDER_SCHEME,
   });
 }
 
