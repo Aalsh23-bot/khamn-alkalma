@@ -1,1 +1,1 @@
-export * from "../src/native-main.tsx";
+import "../src/native-main.tsx";
