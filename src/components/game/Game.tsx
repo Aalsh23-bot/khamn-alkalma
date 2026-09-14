@@ -6,6 +6,7 @@ import { Keyboard } from "./Keyboard";
 import { StagesSelect } from "./StagesSelect";
 import {
   BadgeModal,
+  ChallengeInviteModal,
   HelpModal,
   InstallModal,
   PrivacyModal,
@@ -217,6 +218,12 @@ export function Game() {
         hint={pendingBadge?.hint ?? ""}
         onClose={dismissBadge}
       />
+      <ChallengeInviteModal
+        open={modal === "challengeInvite" && Boolean(challengeCode)}
+        code={challengeCode ?? ""}
+        onClose={() => setModal(null)}
+        onPlay={() => setModal(null)}
+      />
       <InstallModal open={modal === "install"} onClose={() => setModal(null)} />
       <PrivacyModal open={modal === "privacy"} onClose={() => setModal(null)} />
     </>
@@ -266,6 +273,11 @@ export function Game() {
         onHelp={() => setModal("help")}
         onStats={() => setModal("stats")}
         onSettings={() => setModal("settings")}
+        onShareChallenge={
+          mode === "challenge" && challengeCode
+            ? () => setModal("challengeInvite")
+            : undefined
+        }
         onHint={() => {
           void (async () => {
             if (adBusy || hintUsed || inputLocked) return;

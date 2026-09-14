@@ -1,6 +1,6 @@
 import type { LetterStatus } from "./evaluate";
 import { formatArabicDate } from "./daily";
-import { challengeAbsoluteUrl } from "./challenge";
+import { challengeAbsoluteUrl, challengeInviteText } from "./challenge";
 import { isNativeApp, nativeShare } from "@/lib/native";
 import { APP_NAME } from "./brand";
 import type { Mode } from "./storage";
@@ -42,19 +42,32 @@ export function shareText(opts: {
   return lines.join("\n");
 }
 
-export async function shareOrCopy(text: string): Promise<"shared" | "copied"> {
+export async function shareOrCopy(
+  text: string,
+  opts?: { url?: string; dialogTitle?: string },
+): Promise<"shared" | "copied"> {
   try {
     if (isNativeApp()) {
-      await nativeShare(text);
+      await nativeShare(text, opts);
       return "shared";
     }
     if (typeof navigator !== "undefined" && navigator.share) {
-      await navigator.share({ text });
+      await navigator.share({
+        text,
+        url: opts?.url,
+        title: opts?.dialogTitle,
+      });
       return "shared";
     }
   } catch (err) {
     if ((err as { name?: string }).name === "AbortError") throw err;
   }
-  await navigator.clipboard.writeText(text);
+  await navigator.clipboard.writeText(opts?.url ? `${text}\n${opts.url}` : text);
   return "copied";
+}
+
+export async function shareChallengeInvite(code: string): Promise<"shared" | "copied"> {
+  const url = challengeAbsoluteUrl(code);
+  const text = challengeInviteText(code);
+  return shareOrCopy(text, { url, dialogTitle: "شارك التحدّي" });
 }

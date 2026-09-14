@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { Clapperboard, RotateCcw, Share2, X } from "lucide-react";
+import { Clapperboard, Copy, RotateCcw, Share2, X } from "lucide-react";
 import type { LetterStatus } from "@/lib/game/evaluate";
 import {
   formatArabicDate,
@@ -8,8 +8,8 @@ import {
   msUntilTomorrow,
 } from "@/lib/game/daily";
 import { ACHIEVEMENTS, type AchievementsSave } from "@/lib/game/achievements";
-import { challengeInviteText } from "@/lib/game/challenge";
-import { shareOrCopy, shareText } from "@/lib/game/share";
+import { challengeAbsoluteUrl } from "@/lib/game/challenge";
+import { shareChallengeInvite, shareOrCopy, shareText } from "@/lib/game/share";
 import { solutionLabel, type Mode } from "@/lib/game/store";
 import { STAGE_COUNT } from "@/lib/game/words";
 import type { SettingsSave, StatsSave } from "@/lib/game/storage";
@@ -372,7 +372,7 @@ export function ResultModal({
   async function onShareChallengeLink() {
     if (!challengeCode) return;
     try {
-      await shareOrCopy(challengeInviteText(challengeCode));
+      await shareChallengeInvite(challengeCode);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -567,6 +567,80 @@ export function BadgeModal({
           className="mt-6 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg"
         >
           رائع
+        </button>
+      </div>
+    </Shell>
+  );
+}
+
+export function ChallengeInviteModal({
+  open,
+  code,
+  onClose,
+  onPlay,
+}: {
+  open: boolean;
+  code: string;
+  onClose: () => void;
+  onPlay: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const url = code ? challengeAbsoluteUrl(code) : "";
+
+  async function onShare() {
+    if (!code) return;
+    try {
+      const how = await shareChallengeInvite(code);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+      void how;
+    } catch {
+      /* cancelled */
+    }
+  }
+
+  async function onCopyLink() {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return (
+    <Shell open={open} onClose={onClose} title="تحدّي الأصدقاء">
+      <p className="text-sm leading-6 text-muted">
+        جاهز! شارك الرابط مع أصحابك — كل واحد يلعب نفس الكلمة ويقارن المحاولات.
+      </p>
+      <div className="mt-4 break-all rounded-xl bg-bg px-3 py-3 text-center text-xs leading-5 text-fg" dir="ltr">
+        {url || "…"}
+      </div>
+      <div className="mt-4 flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={() => void onShare()}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-accent-fg"
+        >
+          <Share2 className="size-4" />
+          {copied ? "تم!" : "شارك الرابط"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void onCopyLink()}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-key text-sm font-medium text-fg"
+        >
+          <Copy className="size-4" />
+          نسخ الرابط
+        </button>
+        <button
+          type="button"
+          onClick={onPlay}
+          className="flex h-12 w-full items-center justify-center rounded-xl bg-fg text-sm font-semibold text-bg"
+        >
+          ابدأ اللعب
         </button>
       </div>
     </Shell>

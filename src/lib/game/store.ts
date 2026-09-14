@@ -62,7 +62,7 @@ export interface GameStore {
   stages: StagesSave;
   achievements: AchievementsSave;
   challengeCode: string | null;
-  modal: "help" | "stats" | "settings" | "result" | "install" | "privacy" | "badge" | null;
+  modal: "help" | "stats" | "settings" | "result" | "install" | "privacy" | "badge" | "challengeInvite" | null;
   hydrate: () => void;
   goHome: () => void;
   openStages: () => void;
@@ -356,8 +356,8 @@ export const useGame = create<GameStore>((set, get) => ({
     set({
       screen: "play",
       ...freshChallenge(answer, code),
-      modal: null,
-      toast: "تحدّي جديد — شارك الرابط مع أصدقائك",
+      modal: "challengeInvite",
+      toast: null,
     });
     persist(get);
   },

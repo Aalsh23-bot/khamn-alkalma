@@ -87,10 +87,14 @@ export async function haptic(
   }
 }
 
-export async function nativeShare(text: string): Promise<void> {
+export async function nativeShare(
+  text: string,
+  opts?: { url?: string; dialogTitle?: string },
+): Promise<void> {
   await Share.share({
     title: APP_NAME,
     text,
-    dialogTitle: "شارك نتيجتك",
+    url: opts?.url,
+    dialogTitle: opts?.dialogTitle ?? "شارك نتيجتك",
   });
 }

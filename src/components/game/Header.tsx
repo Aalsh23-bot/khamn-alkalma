@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BarChart3, HelpCircle, House, Lightbulb, Settings2 } from "lucide-react";
+import { BarChart3, HelpCircle, House, Lightbulb, Settings2, Share2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Mode } from "@/lib/game/store";
 
@@ -42,6 +42,7 @@ export function Header({
   onStats,
   onSettings,
   onHint,
+  onShareChallenge,
   hintUsed,
   hintDisabled,
 }: {
@@ -52,6 +53,7 @@ export function Header({
   onStats: () => void;
   onSettings: () => void;
   onHint: () => void;
+  onShareChallenge?: () => void;
   hintUsed: boolean;
   hintDisabled: boolean;
 }) {
@@ -68,11 +70,20 @@ export function Header({
 
       <div className="flex min-w-0 flex-1 flex-col items-center">
         <h1 className="font-display text-[1.35rem] font-semibold leading-none tracking-tight text-fg">
-          {mode === "daily" ? "كلمة اليوم" : mode === "challenge" ? "تحدّي الأصدقاء" : `المرحلة ${stageLevel}`}
+          {mode === "daily"
+            ? "كلمة اليوم"
+            : mode === "challenge"
+              ? "تحدّي الأصدقاء"
+              : `المرحلة ${stageLevel}`}
         </h1>
       </div>
 
       <div className="flex shrink-0 items-center">
+        {mode === "challenge" && onShareChallenge && (
+          <IconBtn label="شارك التحدّي" onClick={onShareChallenge} active>
+            <Share2 className="size-5" strokeWidth={1.8} />
+          </IconBtn>
+        )}
         <IconBtn
           label={hintUsed ? "استُخدم التلميح" : "كشف حرف مقابل إعلان"}
           onClick={onHint}
