@@ -243,6 +243,7 @@ export function Game() {
           onStages={openStages}
           onChallenge={() => startChallenge()}
           onHelp={() => setModal("help")}
+          onStats={() => setModal("stats")}
           onSettings={() => setModal("settings")}
         />
         {modals}

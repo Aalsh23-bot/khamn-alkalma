@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CalendarDays, HelpCircle, Layers, Settings2, Users } from "lucide-react";
+import { BarChart3, CalendarDays, HelpCircle, Layers, Settings2, Users } from "lucide-react";
 import { APP_NAME } from "@/lib/game/brand";
 import { formatArabicDate, localDateKey } from "@/lib/game/daily";
 import { STAGE_COUNT } from "@/lib/game/words";
@@ -12,6 +12,7 @@ export function HomeScreen({
   onStages,
   onChallenge,
   onHelp,
+  onStats,
   onSettings,
 }: {
   stats: StatsSave;
@@ -20,6 +21,7 @@ export function HomeScreen({
   onStages: () => void;
   onChallenge: () => void;
   onHelp: () => void;
+  onStats: () => void;
   onSettings: () => void;
 }) {
   const today = localDateKey();
@@ -44,14 +46,24 @@ export function HomeScreen({
           <HelpCircle className="size-5" strokeWidth={1.8} />
         </button>
         <span className="text-xs text-muted">{formatArabicDate(today)}</span>
-        <button
-          type="button"
-          aria-label="الإعدادات"
-          onClick={onSettings}
-          className="flex size-11 items-center justify-center rounded-xl text-fg hover:bg-fg/6"
-        >
-          <Settings2 className="size-5" strokeWidth={1.8} />
-        </button>
+        <div className="flex items-center">
+          <button
+            type="button"
+            aria-label="الإحصائيات"
+            onClick={onStats}
+            className="flex size-11 items-center justify-center rounded-xl text-fg hover:bg-fg/6"
+          >
+            <BarChart3 className="size-5" strokeWidth={1.8} />
+          </button>
+          <button
+            type="button"
+            aria-label="الإعدادات"
+            onClick={onSettings}
+            className="flex size-11 items-center justify-center rounded-xl text-fg hover:bg-fg/6"
+          >
+            <Settings2 className="size-5" strokeWidth={1.8} />
+          </button>
+        </div>
       </header>
 
       <div className="flex flex-1 flex-col items-center justify-center">
