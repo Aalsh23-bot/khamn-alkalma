@@ -206,6 +206,8 @@ export function SettingsModal({
   onSound,
   onInstall,
   onPrivacy,
+  onAuth,
+  authLabel,
   isNative,
 }: {
   open: boolean;
@@ -215,6 +217,8 @@ export function SettingsModal({
   onSound: (v: boolean) => void;
   onInstall: () => void;
   onPrivacy: () => void;
+  onAuth: () => void;
+  authLabel?: string | null;
   isNative: boolean;
 }) {
   return (
@@ -233,11 +237,18 @@ export function SettingsModal({
           onChange={onSound}
         />
       </div>
+      <button
+        type="button"
+        onClick={onAuth}
+        className="mt-5 flex h-12 w-full items-center justify-center rounded-xl bg-key text-sm font-medium text-fg transition-transform duration-150 active:scale-[0.98]"
+      >
+        {authLabel ? `الحساب · ${authLabel}` : "تسجيل الدخول / إنشاء حساب"}
+      </button>
       {!isNative && (
         <button
           type="button"
           onClick={onInstall}
-          className="mt-5 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg transition-transform duration-150 active:scale-[0.98]"
+          className="mt-3 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg transition-transform duration-150 active:scale-[0.98]"
         >
           تثبيت على الجوال
         </button>

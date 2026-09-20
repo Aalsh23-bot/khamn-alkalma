@@ -62,7 +62,7 @@ export interface GameStore {
   stages: StagesSave;
   achievements: AchievementsSave;
   challengeCode: string | null;
-  modal: "help" | "stats" | "settings" | "result" | "install" | "privacy" | "badge" | "challengeInvite" | null;
+  modal: "help" | "stats" | "settings" | "result" | "install" | "privacy" | "badge" | "challengeInvite" | "auth" | null;
   hydrate: () => void;
   goHome: () => void;
   openStages: () => void;

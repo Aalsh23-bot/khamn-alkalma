@@ -13,3 +13,13 @@ export type {
   GameMode,
   WordTier,
 } from "./types";
+export {
+  getSession,
+  signInWithEmail,
+  signOut,
+  signUpWithEmail,
+  toAuthUser,
+  updateDisplayName,
+  type AuthUser,
+} from "./auth";
+export { useSupabaseAuth } from "./use-auth";

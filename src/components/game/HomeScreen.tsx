@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BarChart3, CalendarDays, HelpCircle, Layers, Settings2, Users } from "lucide-react";
+import { BarChart3, CalendarDays, HelpCircle, Layers, Settings2, UserRound, Users } from "lucide-react";
 import { APP_NAME } from "@/lib/game/brand";
 import { formatArabicDate, localDateKey } from "@/lib/game/daily";
 import { STAGE_COUNT } from "@/lib/game/words";
@@ -14,6 +14,8 @@ export function HomeScreen({
   onHelp,
   onStats,
   onSettings,
+  onAuth,
+  authLabel,
 }: {
   stats: StatsSave;
   stages: StagesSave;
@@ -23,6 +25,8 @@ export function HomeScreen({
   onHelp: () => void;
   onStats: () => void;
   onSettings: () => void;
+  onAuth: () => void;
+  authLabel?: string | null;
 }) {
   const today = localDateKey();
   const daily = loadRound("daily");
@@ -47,6 +51,14 @@ export function HomeScreen({
         </button>
         <span className="text-xs text-muted">{formatArabicDate(today)}</span>
         <div className="flex items-center">
+          <button
+            type="button"
+            aria-label={authLabel ? `الحساب: ${authLabel}` : "الحساب"}
+            onClick={onAuth}
+            className="flex size-11 items-center justify-center rounded-xl text-fg hover:bg-fg/6"
+          >
+            <UserRound className="size-5" strokeWidth={1.8} />
+          </button>
           <button
             type="button"
             aria-label="الإحصائيات"

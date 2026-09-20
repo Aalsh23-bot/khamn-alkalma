@@ -14,6 +14,7 @@ import {
   SettingsModal,
   StatsModal,
 } from "./Modals";
+import { AuthModal } from "./AuthModal";
 import { unlockAudio } from "@/lib/game/audio";
 import { achievementById } from "@/lib/game/achievements";
 import { buildKeyMap } from "@/lib/game/evaluate";
@@ -22,6 +23,7 @@ import { useGame } from "@/lib/game/store";
 import { STAGE_COUNT } from "@/lib/game/words";
 import { isNativeApp } from "@/lib/native";
 import { showRewardedAd } from "@/lib/ads/ads";
+import { useSupabaseAuth } from "@/lib/supabase/use-auth";
 import { RewardedAdOverlay } from "./RewardedAdOverlay";
 
 export function Game() {
@@ -70,6 +72,8 @@ export function Game() {
   const setSound = useGame((s) => s.setSound);
 
   const [adBusy, setAdBusy] = useState(false);
+  const auth = useSupabaseAuth();
+  const authLabel = auth.user?.displayName || auth.user?.email || null;
 
   const pendingBadge = achievements.pending[0]
     ? achievementById(achievements.pending[0])
@@ -154,7 +158,22 @@ export function Game() {
         onSound={setSound}
         onInstall={() => setModal("install")}
         onPrivacy={() => setModal("privacy")}
+        onAuth={() => setModal("auth")}
+        authLabel={authLabel}
         isNative={isNativeApp()}
+      />
+      <AuthModal
+        open={modal === "auth"}
+        onClose={() => setModal(null)}
+        configured={auth.configured}
+        ready={auth.ready}
+        busy={auth.busy}
+        error={auth.error}
+        user={auth.user}
+        clearError={auth.clearError}
+        signIn={auth.signIn}
+        signUp={auth.signUp}
+        signOut={auth.signOut}
       />
       <ResultModal
         open={modal === "result"}
@@ -245,6 +264,8 @@ export function Game() {
           onHelp={() => setModal("help")}
           onStats={() => setModal("stats")}
           onSettings={() => setModal("settings")}
+          onAuth={() => setModal("auth")}
+          authLabel={authLabel}
         />
         {modals}
         <RewardedAdOverlay />
