@@ -17,3 +17,4 @@ android/app/build/
 android/build/
 *.jks
 *.keystore
+supabase/.temp/

@@ -22,6 +22,7 @@
     "native:build": "vite build --config vite.native.config.ts && rm -rf dist-native/__grok dist-native/og.jpg dist-native/x-banner.jpg",
     "native:sync": "npm run native:build && npx cap sync",
     "native:pack": "python3 scripts/pack-native.py",
+    "supabase:seed-words": "node scripts/seed-supabase-words.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

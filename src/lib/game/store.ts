@@ -37,6 +37,13 @@ import {
   type StatsSave,
 } from "./storage";
 import * as sfx from "./audio";
+import { submitDailyResult } from "@/lib/supabase/api";
+
+function syncDailyResult(guesses: string[], won: boolean, hardMode: boolean) {
+  void submitDailyResult({ guesses, won, hardMode }).catch(() => {
+    /* offline / not signed in / server reject — local play still works */
+  });
+}
 
 export type { Mode, Screen };
 
@@ -554,6 +561,7 @@ export const useGame = create<GameStore>((set, get) => ({
           dailyWins,
         };
         saveStats(stats);
+        syncDailyResult(s.guesses, true, s.settings.hardMode);
       }
       let stages = s.stages;
       if ((won || lost) && s.mode === "stages" && won) {
@@ -696,6 +704,7 @@ function commitPendingDailyLoss(get: () => GameStore) {
   };
   saveStats(next);
   useGame.setState({ stats: next });
+  syncDailyResult(s.guesses, false, s.settings.hardMode);
 }
 
 function dayDiff(a: string, b: string): number {

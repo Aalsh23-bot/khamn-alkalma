@@ -23,3 +23,12 @@ export {
   type AuthUser,
 } from "./auth";
 export { useSupabaseAuth } from "./use-auth";
+export {
+  createServerChallenge,
+  fetchDailyMeta,
+  fetchLeaderboard,
+  submitDailyResult,
+  type DailyMeta,
+  type LeaderboardRow,
+  type SubmitDailyResult,
+} from "./api";

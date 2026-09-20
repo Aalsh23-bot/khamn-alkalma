@@ -32,18 +32,29 @@ VITE_SUPABASE_ANON_KEY=الصق_المفتاح_هنا
 طُبّقت الجداول على المشروع وتحققنا عبر الـ API.
 إصلاح `daily_puzzles_public` طُبّق أيضاً.
 
-## الخطوة 3 — Auth (الحسابات)
+## الخطوة 3 — Auth (الحسابات) ✅
 
-في التطبيق: زر الحساب في الرئيسية + من الإعدادات.
-Email / Password عبر Supabase Auth.
+زر الحساب في الرئيسية + Email/Password.
+تأكيد البريد تلقائي عبر trigger (ما تحتاج تدور Authentication في الموبايل).
 
-**وين Authentication في اللوحة؟**
-افتح مباشرة:
+مستخدمون (اختياري):
 https://supabase.com/dashboard/project/eqxaivexuowngyigmqwl/auth/users
 
-أو من القائمة ☰ ابحث عن **Authentication** / **Users** (مو داخل Settings).
+## الخطوة 4 — منطق السيرفر / Anti-cheat ✅
 
-ملاحظة: عطّلنا الحاجة لتأكيد البريد عبر trigger في قاعدة البيانات، فما تحتاج تغيّر إعداد Confirm email.
+طُبّق مباشرة على Postgres (RPC) بدون الحاجة لـ Access Token:
+
+| RPC | الوظيفة |
+|-----|---------|
+| `get_daily_meta` | رقم لغز اليوم بدون كشف الإجابة |
+| `submit_daily_result` | تحقق + Anti-cheat + نتائج + Leaderboard |
+| `create_friend_challenge` | تحدّي صديق على السيرفر |
+| `get_leaderboard` | لوحة الصدارة |
+| `evaluate_guess` | تقييم تخمين (Wordle) |
+
+- بُذرت **1000** كلمة إجابة مع التصنيفات
+- Edge Function جاهزة للنشر لاحقاً: `supabase/functions/game-api`
+- اللعبة ترسل نتيجة كلمة اليوم للسيرفر تلقائياً إذا اللاعب مسجّل
 
 ## الخطوات
 
@@ -51,6 +62,6 @@ https://supabase.com/dashboard/project/eqxaivexuowngyigmqwl/auth/users
 |---|------|------|
 | 1 | عميل Supabase + `.env` | ✅ |
 | 2 | جداول Postgres + RLS | ✅ |
-| 3 | Auth (حسابات) | ✅ كود — عطّل Confirm email إن حاب |
-| 4 | Edge Functions (تحقق / anti-cheat) | قادم |
-| 5 | ربط اللعبة + لوحة الصدارة | قادم |
+| 3 | Auth (حسابات) | ✅ |
+| 4 | تحقق / anti-cheat / daily | ✅ |
+| 5 | UI لوحة الصدارة + ربط أوضح | قادم |
