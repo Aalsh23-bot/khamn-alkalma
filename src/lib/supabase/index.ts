@@ -26,6 +26,7 @@ export { useSupabaseAuth } from "./use-auth";
 export {
   createServerChallenge,
   fetchDailyMeta,
+  fetchFriendChallenge,
   fetchLeaderboard,
   submitDailyResult,
   type DailyMeta,

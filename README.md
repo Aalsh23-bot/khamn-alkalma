@@ -33,11 +33,12 @@
 
 إعلانات المكافأة اختيارية فقط (كشف حرف / فرصة إضافية).
 
+مع Supabase (اختياري): حسابات، لوحة صدارة، والتحقق من نتائج كلمة اليوم.
+
 تفاصيل AdMob: [`native/ADS.md`](native/ADS.md)
 
-## الخلفية (Supabase) — قيد البناء
+## الخلفية (Supabase)
 
-الخطة: Capacitor → Supabase (Postgres + Edge Functions + Auth).
+مكتمل — انظر [`supabase/README.md`](supabase/README.md).
 
-- إعداد العميل والمتغيرات: [`supabase/README.md`](supabase/README.md)
-- انسخ [`.env.example`](.env.example) إلى `.env` بعد إنشاء المشروع
+- انسخ [`.env.example`](.env.example) إلى `.env` بمفاتيح المشروع

@@ -15,6 +15,7 @@ import { STAGE_COUNT } from "@/lib/game/words";
 import type { SettingsSave, StatsSave } from "@/lib/game/storage";
 import { cn } from "@/lib/utils";
 import { WinCalendar } from "./WinCalendar";
+import { LeaderboardPanel } from "./LeaderboardPanel";
 
 function Shell({
   open,
@@ -128,11 +129,15 @@ export function StatsModal({
   onClose,
   stats,
   achievements,
+  currentUserId,
+  onAuth,
 }: {
   open: boolean;
   onClose: () => void;
   stats: StatsSave;
   achievements: AchievementsSave;
+  currentUserId?: string | null;
+  onAuth?: () => void;
 }) {
   const winPct = stats.played ? Math.round((stats.wins / stats.played) * 100) : 0;
   const maxBar = Math.max(1, ...stats.distribution);
@@ -172,6 +177,20 @@ export function StatsModal({
       </div>
 
       <WinCalendar dailyWins={stats.dailyWins ?? {}} currentStreak={stats.currentStreak} />
+
+      {open && (
+        <LeaderboardPanel
+          currentUserId={currentUserId}
+          onNeedAuth={
+            onAuth
+              ? () => {
+                  onClose();
+                  onAuth();
+                }
+              : undefined
+          }
+        />
+      )}
 
       <p className="mt-5 mb-2 text-sm font-medium">الشارات</p>
       <div className="grid grid-cols-2 gap-2">

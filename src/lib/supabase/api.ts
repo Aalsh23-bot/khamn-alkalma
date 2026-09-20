@@ -75,6 +75,20 @@ export async function createServerChallenge(): Promise<{
   return row as { code: string; word: string };
 }
 
+/** Resolve a server-stored challenge code to its answer word. */
+export async function fetchFriendChallenge(
+  code: string,
+): Promise<{ code: string; word: string } | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb.rpc("get_friend_challenge", {
+    p_code: code,
+  });
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  return (row as { code: string; word: string }) ?? null;
+}
+
 export async function fetchLeaderboard(
   limit = 20,
 ): Promise<LeaderboardRow[]> {

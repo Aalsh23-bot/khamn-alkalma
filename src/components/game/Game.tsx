@@ -149,6 +149,8 @@ export function Game() {
         onClose={() => setModal(null)}
         stats={stats}
         achievements={achievements}
+        currentUserId={auth.user?.id}
+        onAuth={() => setModal("auth")}
       />
       <SettingsModal
         open={modal === "settings"}

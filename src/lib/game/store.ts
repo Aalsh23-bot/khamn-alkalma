@@ -37,12 +37,23 @@ import {
   type StatsSave,
 } from "./storage";
 import * as sfx from "./audio";
-import { submitDailyResult } from "@/lib/supabase/api";
+import { submitDailyResult, createServerChallenge, fetchFriendChallenge } from "@/lib/supabase/api";
 
 function syncDailyResult(guesses: string[], won: boolean, hardMode: boolean) {
   void submitDailyResult({ guesses, won, hardMode }).catch(() => {
     /* offline / not signed in / server reject — local play still works */
   });
+}
+
+async function resolveChallengeAnswer(code: string): Promise<string | null> {
+  const local = decodeChallenge(code);
+  if (local) return local;
+  try {
+    const remote = await fetchFriendChallenge(code);
+    return remote?.word ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export type { Mode, Screen };
@@ -237,24 +248,37 @@ export const useGame = create<GameStore>((set, get) => ({
     const inviteCode = readChallengeCodeFromLocation();
     if (inviteCode) {
       clearChallengeCodeFromUrl();
-      const answer = decodeChallenge(inviteCode);
-      if (answer) {
+      void (async () => {
+        const answer = await resolveChallengeAnswer(inviteCode);
+        if (answer) {
+          set({
+            hydrated: true,
+            settings,
+            stats,
+            stages,
+            achievements,
+            screen: "play",
+            ...freshChallenge(answer, inviteCode),
+            modal: null,
+            toast: "تحدّي الأصدقاء — نفس الكلمة",
+            revealing: false,
+            shake: false,
+          });
+          persist(get);
+          return;
+        }
         set({
           hydrated: true,
+          screen: "home",
           settings,
           stats,
           stages,
           achievements,
-          screen: "play",
-          ...freshChallenge(answer, inviteCode),
           modal: null,
-          toast: "تحدّي الأصدقاء — نفس الكلمة",
-          revealing: false,
-          shake: false,
+          toast: "رابط التحدّي غير صالح",
         });
-        persist(get);
-        return;
-      }
+      })();
+      return;
     }
 
     set({
@@ -319,18 +343,20 @@ export const useGame = create<GameStore>((set, get) => ({
     persist(get);
 
     if (code) {
-      const answer = decodeChallenge(code);
-      if (!answer) {
-        set({ toast: "رابط التحدّي غير صالح", screen: "home", modal: null });
-        return;
-      }
-      set({
-        screen: "play",
-        ...freshChallenge(answer, code),
-        modal: null,
-        toast: "تحدّي الأصدقاء — نفس الكلمة",
-      });
-      persist(get);
+      void (async () => {
+        const answer = await resolveChallengeAnswer(code);
+        if (!answer) {
+          set({ toast: "رابط التحدّي غير صالح", screen: "home", modal: null });
+          return;
+        }
+        set({
+          screen: "play",
+          ...freshChallenge(answer, code),
+          modal: null,
+          toast: "تحدّي الأصدقاء — نفس الكلمة",
+        });
+        persist(get);
+      })();
       return;
     }
 
@@ -358,15 +384,32 @@ export const useGame = create<GameStore>((set, get) => ({
   newChallenge: () => {
     commitPendingDailyLoss(get);
     persist(get);
-    const answer = randomChallengeAnswer();
-    const code = encodeChallenge(answer);
-    set({
-      screen: "play",
-      ...freshChallenge(answer, code),
-      modal: "challengeInvite",
-      toast: null,
-    });
-    persist(get);
+    void (async () => {
+      try {
+        const server = await createServerChallenge();
+        if (server?.code && server.word) {
+          set({
+            screen: "play",
+            ...freshChallenge(server.word, server.code),
+            modal: "challengeInvite",
+            toast: null,
+          });
+          persist(get);
+          return;
+        }
+      } catch {
+        /* fall back to local */
+      }
+      const answer = randomChallengeAnswer();
+      const code = encodeChallenge(answer);
+      set({
+        screen: "play",
+        ...freshChallenge(answer, code),
+        modal: "challengeInvite",
+        toast: null,
+      });
+      persist(get);
+    })();
   },
 
   startStage: (level) => {

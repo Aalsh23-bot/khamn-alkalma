@@ -56,6 +56,12 @@ https://supabase.com/dashboard/project/eqxaivexuowngyigmqwl/auth/users
 - Edge Function جاهزة للنشر لاحقاً: `supabase/functions/game-api`
 - اللعبة ترسل نتيجة كلمة اليوم للسيرفر تلقائياً إذا اللاعب مسجّل
 
+## الخطوة 5 — لوحة الصدارة + الربط ✅
+
+- لوحة الصدارة داخل الإحصائيات
+- تحدّي الأصدقاء يستخدم السيرفر عند تسجيل الدخول (مع fallback محلي)
+- نتائج كلمة اليوم تُزامَن للسيرفر تلقائياً
+
 ## الخطوات
 
 | # | ماذا | حالة |
@@ -64,4 +70,4 @@ https://supabase.com/dashboard/project/eqxaivexuowngyigmqwl/auth/users
 | 2 | جداول Postgres + RLS | ✅ |
 | 3 | Auth (حسابات) | ✅ |
 | 4 | تحقق / anti-cheat / daily | ✅ |
-| 5 | UI لوحة الصدارة + ربط أوضح | قادم |
+| 5 | UI لوحة الصدارة + ربط اللعبة | ✅ |
