@@ -37,10 +37,13 @@ VITE_SUPABASE_ANON_KEY=الصق_المفتاح_هنا
 في التطبيق: زر الحساب في الرئيسية + من الإعدادات.
 Email / Password عبر Supabase Auth.
 
-**مهم في لوحة Supabase (مرة واحدة):**
-1. ☰ → **Authentication** → **Providers** → **Email**
-2. عطّل **Confirm email** مؤقتاً عشان التسجيل يفتح جلسة مباشرة (مناسب للتطوير)
-3. أو اتركه مفعّل وراح يطلب تأكيد البريد
+**وين Authentication في اللوحة؟**
+افتح مباشرة:
+https://supabase.com/dashboard/project/eqxaivexuowngyigmqwl/auth/users
+
+أو من القائمة ☰ ابحث عن **Authentication** / **Users** (مو داخل Settings).
+
+ملاحظة: عطّلنا الحاجة لتأكيد البريد عبر trigger في قاعدة البيانات، فما تحتاج تغيّر إعداد Confirm email.
 
 ## الخطوات
 
