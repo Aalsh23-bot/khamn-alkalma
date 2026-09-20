@@ -1,6 +1,7 @@
 # Supabase — خمن الكلمة
 
-الهيكل المستهدف:
+المشروع: **khamn-alkalma**  
+URL: `https://eqxaivexuowngyigmqwl.supabase.co`
 
 ```
 React + Vite + Capacitor  →  Supabase
@@ -9,31 +10,39 @@ React + Vite + Capacitor  →  Supabase
                               └── Auth         (حسابات اللاعبين)
 ```
 
-## الخطوة 1 — إنشاء المشروع (أنت)
+## الخطوة 1 — المفاتيح ✅ (جزئياً)
 
-1. افتح [https://supabase.com/dashboard](https://supabase.com/dashboard) وسجّل دخولك.
-2. **New project** → اختر منظمة → اسم مثل `khamn-alkalma` → كلمة مرور قوية لقاعدة البيانات → Region قريبة (مثلاً `eu-central-1`).
-3. بعد ما يجهز المشروع:
-   - **Project Settings → API**
-   - انسخ **Project URL** → `VITE_SUPABASE_URL`
-   - انسخ **anon public** → `VITE_SUPABASE_ANON_KEY`
-4. في جذر المشروع محلياً:
+1. Project URL: جاهز أعلاه.
+2. من **Project Settings → API Keys** انسخ **anon (public)** بزر Copy.
+3. محلياً:
 
 ```bash
 cp .env.example .env
-# عدّل .env بالقيم المنسوخة
 ```
 
-5. أرسل لي تأكيد إنك خلصت (أو الصق الـ Project URL فقط بدون المفاتيح السرية) عشان نكمل **الخطوة 2: جداول Postgres**.
+```env
+VITE_SUPABASE_URL=https://eqxaivexuowngyigmqwl.supabase.co
+VITE_SUPABASE_ANON_KEY=الصق_المفتاح_هنا
+```
 
-> لا ترسل **service_role** في الشات. نستخدمه لاحقاً فقط في Edge Functions.
+لا ترسل **service_role** في الشات.
 
-## الخطوات التالية (الكود)
+## الخطوة 2 — تطبيق الجداول (الآن)
+
+1. من لوحة Supabase: القائمة ☰ → **SQL Editor**
+2. **New query**
+3. الصق محتوى الملف:
+   [`migrations/20260320120000_init_game_schema.sql`](./migrations/20260320120000_init_game_schema.sql)
+4. اضغط **Run**
+5. تأكد من ظهور الجداول: ☰ → **Table Editor**  
+   لازم تشوف: `profiles`, `words`, `daily_puzzles`, `challenges`, `game_results`, `leaderboard_scores`
+
+## الخطوات
 
 | # | ماذا | حالة |
 |---|------|------|
-| 1 | عميل Supabase + `.env` | هذا المجلد / `src/lib/supabase` |
-| 2 | جداول: profiles, words, daily_puzzles, game_results, leaderboard | قادم |
+| 1 | عميل Supabase + `.env` | ✅ كود / بانتظار anon في `.env` |
+| 2 | جداول Postgres + RLS | ✅ ملف SQL جاهز — طبّقه من SQL Editor |
 | 3 | Auth (حسابات) | قادم |
 | 4 | Edge Functions (تحقق / anti-cheat) | قادم |
 | 5 | ربط اللعبة + لوحة الصدارة | قادم |
