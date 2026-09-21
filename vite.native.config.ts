@@ -8,6 +8,8 @@ const rootDir = import.meta.dirname;
 /** Static SPA bundle for Capacitor (iOS/Android). Independent of the web SSR build. */
 export default defineConfig({
   root: resolve(rootDir, "native"),
+  // Load VITE_* from repo-root `.env` (not native/.env)
+  envDir: rootDir,
   base: "./",
   plugins: [tailwindcss(), viteReact()],
   resolve: {

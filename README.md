@@ -22,7 +22,8 @@
 | `android/` | **Android Studio** — أندرويد ومتجر غوغل |
 | المجلد كامل | VS Code / أي محرر — لتعديل الكود |
 
-نصوص صفحة المتجر: [`native/XCODE.md`](native/XCODE.md)
+نصوص صفحة المتجر: [`native/XCODE.md`](native/XCODE.md)  
+قائمة الإطلاق للمتاجر: [`native/STORE-LAUNCH.md`](native/STORE-LAUNCH.md)
 
 ## أوضاع اللعب
 
