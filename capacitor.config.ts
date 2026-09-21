@@ -6,11 +6,12 @@ const config: CapacitorConfig = {
   webDir: "dist-native",
   backgroundColor: "#F3EEE4",
   ios: {
-    contentInset: "never",
+    contentInset: "automatic",
     backgroundColor: "#F3EEE4",
     preferredContentMode: "mobile",
     scheme: "khamsa",
-    limitsNavigationsToAppBoundDomains: true,
+    // false avoids blank WKWebView when local assets/plugins load on first run
+    limitsNavigationsToAppBoundDomains: false,
   },
   android: {
     backgroundColor: "#F3EEE4",
