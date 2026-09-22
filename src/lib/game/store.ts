@@ -43,17 +43,37 @@ import {
   challengeSideForRole,
   createServerChallenge,
   fetchChallengeLobby,
+  fetchLexiconSnapshot,
   joinFriendChallenge,
   submitChallengeResult,
   submitDailyResult,
   type ChallengeLobby,
 } from "@/lib/supabase/api";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import {
+  loadCachedLexicon,
+  saveCachedLexicon,
+  shouldRefreshLexicon,
+} from "./lexicon-sync";
 
 function syncDailyResult(guesses: string[], won: boolean, hardMode: boolean) {
   void submitDailyResult({ guesses, won, hardMode }).catch(() => {
     /* offline / not signed in / server reject — local play still works */
   });
+}
+
+function syncLexiconInBackground() {
+  loadCachedLexicon();
+  if (!isSupabaseConfigured()) return;
+  if (!shouldRefreshLexicon()) return;
+  void (async () => {
+    try {
+      const snap = await fetchLexiconSnapshot();
+      if (snap?.words?.length) saveCachedLexicon(snap);
+    } catch {
+      /* keep cache / bundled */
+    }
+  })();
 }
 
 function mapChallengeError(message: string): string {
@@ -107,6 +127,7 @@ export interface GameStore {
     | "challengeHub"
     | "challengeJoin"
     | "auth"
+    | "wordsAdmin"
     | null;
   hydrate: () => void;
   goHome: () => void;
@@ -377,6 +398,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const achievements = loadAchievements();
     const challengeStats = loadChallengeStats();
     sfx.setSoundEnabled(settings.sound);
+    syncLexiconInBackground();
 
     const inviteCode = readChallengeCodeFromLocation();
     if (inviteCode) {

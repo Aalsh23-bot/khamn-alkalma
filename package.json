@@ -23,7 +23,8 @@
     "native:sync": "npm run native:build && npx cap sync",
     "native:pack": "python3 scripts/pack-native.py",
     "supabase:seed-words": "node scripts/seed-supabase-words.mjs",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "supabase:seed-lexicon": "node scripts/seed-guess-lexicon.mjs"
   },
   "dependencies": {
     "@capacitor-community/admob": "^8.1.0",

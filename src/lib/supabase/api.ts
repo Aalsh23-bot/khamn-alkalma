@@ -217,3 +217,99 @@ export function challengeOutcome(
   // both lost
   return "draw";
 }
+
+export type LexiconSnapshotDto = {
+  updated_at: string;
+  count: number;
+  words: string[];
+};
+
+export type AdminWordRow = {
+  id: number;
+  word: string;
+  tier: "common" | "familiar" | "rare";
+  is_answer: boolean;
+  is_guessable: boolean;
+  active: boolean;
+  notes: string | null;
+  updated_at: string;
+};
+
+export async function fetchLexiconSnapshot(): Promise<LexiconSnapshotDto | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data, error } = await sb.rpc("get_lexicon_snapshot");
+  if (error) throw error;
+  const row = data as LexiconSnapshotDto;
+  if (!row?.words || !Array.isArray(row.words)) return null;
+  return row;
+}
+
+export async function fetchIsAppAdmin(): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  const sb = requireSupabase();
+  const { data: sessionData } = await sb.auth.getSession();
+  if (!sessionData.session) return false;
+  const { data, error } = await sb.rpc("is_app_admin");
+  if (error) return false;
+  return Boolean(data);
+}
+
+export async function adminListWords(input?: {
+  search?: string;
+  limit?: number;
+  offset?: number;
+  activeOnly?: boolean | null;
+}): Promise<AdminWordRow[]> {
+  const sb = requireSupabase();
+  const { data, error } = await sb.rpc("admin_list_words", {
+    p_search: input?.search ?? null,
+    p_limit: input?.limit ?? 50,
+    p_offset: input?.offset ?? 0,
+    p_active_only: input?.activeOnly ?? null,
+  });
+  if (error) throw error;
+  return (data as AdminWordRow[]) ?? [];
+}
+
+export async function adminUpsertWord(input: {
+  word: string;
+  tier?: "common" | "familiar" | "rare";
+  isAnswer?: boolean;
+  isGuessable?: boolean;
+  active?: boolean;
+  notes?: string | null;
+}): Promise<AdminWordRow> {
+  const sb = requireSupabase();
+  const { data, error } = await sb.rpc("admin_upsert_word", {
+    p_word: input.word,
+    p_tier: input.tier ?? "familiar",
+    p_is_answer: input.isAnswer ?? false,
+    p_is_guessable: input.isGuessable ?? true,
+    p_active: input.active ?? true,
+    p_notes: input.notes ?? null,
+  });
+  if (error) throw error;
+  return data as AdminWordRow;
+}
+
+export async function adminSetWordFlags(input: {
+  id: number;
+  isAnswer?: boolean | null;
+  isGuessable?: boolean | null;
+  active?: boolean | null;
+  tier?: string | null;
+  notes?: string | null;
+}): Promise<AdminWordRow> {
+  const sb = requireSupabase();
+  const { data, error } = await sb.rpc("admin_set_word_flags", {
+    p_id: input.id,
+    p_is_answer: input.isAnswer ?? null,
+    p_is_guessable: input.isGuessable ?? null,
+    p_active: input.active ?? null,
+    p_tier: input.tier ?? null,
+    p_notes: input.notes ?? null,
+  });
+  if (error) throw error;
+  return data as AdminWordRow;
+}
