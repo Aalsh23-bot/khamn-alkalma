@@ -5,6 +5,7 @@ import { Keyboard, KeyboardResize } from "@capacitor/keyboard";
 import { Share } from "@capacitor/share";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { StatusBar, Style } from "@capacitor/status-bar";
+import { ADMOB } from "@/lib/ads/config";
 import { APP_NAME } from "@/lib/game/brand";
 
 export const APP_VERSION = "1.0.0";
@@ -31,6 +32,16 @@ export async function bootstrapNative(): Promise<void> {
     await Keyboard.setResizeMode({ mode: KeyboardResize.None });
   } catch {
     /* ios may ignore */
+  }
+
+  // Warm AdMob with Google test IDs (production flag lives in ads/config.ts).
+  try {
+    const { AdMob } = await import("@capacitor-community/admob");
+    await AdMob.initialize({
+      initializeForTesting: !ADMOB.useProductionIds,
+    });
+  } catch {
+    /* AdMob optional until store IDs are ready */
   }
 
   try {

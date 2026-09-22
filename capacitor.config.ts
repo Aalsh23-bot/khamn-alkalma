@@ -6,11 +6,11 @@ const config: CapacitorConfig = {
   webDir: "dist-native",
   backgroundColor: "#F3EEE4",
   ios: {
-    contentInset: "never",
+    contentInset: "automatic",
     backgroundColor: "#F3EEE4",
     preferredContentMode: "mobile",
-    scheme: "khamsa",
-    limitsNavigationsToAppBoundDomains: true,
+    // Use default Capacitor scheme — custom schemes can leave a blank WKWebView on simulator
+    limitsNavigationsToAppBoundDomains: false,
   },
   android: {
     backgroundColor: "#F3EEE4",
@@ -34,8 +34,6 @@ const config: CapacitorConfig = {
       resize: "none",
       resizeOnFullScreen: false,
     },
-    // AdMob app IDs: replace with your production IDs in src/lib/ads/config.ts
-    // and mirror them in ios/Android native manifests when shipping.
   },
 };
 
