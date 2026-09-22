@@ -195,7 +195,8 @@ function Field({
       <span className="mb-1.5 block text-sm font-medium text-fg">{label}</span>
       <input
         className={cn(
-          "h-12 w-full rounded-xl border border-line bg-bg px-3 text-sm text-fg outline-none",
+          // text-base (16px) prevents iOS Safari/WKWebView focus zoom
+          "h-12 w-full rounded-xl border border-line bg-bg px-3 text-base text-fg outline-none",
           "placeholder:text-muted focus:border-accent",
         )}
         value={value}

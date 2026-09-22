@@ -118,7 +118,7 @@ export function WordsAdminModal({
           <div className="space-y-3 border-b border-line px-5 py-3">
             <div className="flex gap-2">
               <input
-                className="h-11 flex-1 rounded-xl border border-line bg-bg px-3 text-sm outline-none focus:border-accent"
+                className="h-11 flex-1 rounded-xl border border-line bg-bg px-3 text-base outline-none focus:border-accent"
                 placeholder="بحث…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -137,7 +137,7 @@ export function WordsAdminModal({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <input
-                className="h-11 min-w-[8rem] flex-1 rounded-xl border border-line bg-bg px-3 text-sm outline-none focus:border-accent"
+                className="h-11 min-w-[8rem] flex-1 rounded-xl border border-line bg-bg px-3 text-base outline-none focus:border-accent"
                 placeholder="كلمة جديدة (٥ أحرف)"
                 value={newWord}
                 onChange={(e) => setNewWord(e.target.value)}
