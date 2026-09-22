@@ -230,8 +230,10 @@ export function SettingsModal({
   onInstall,
   onPrivacy,
   onAuth,
+  onWordsAdmin,
   authLabel,
   isNative,
+  showWordsAdmin,
 }: {
   open: boolean;
   onClose: () => void;
@@ -241,8 +243,10 @@ export function SettingsModal({
   onInstall: () => void;
   onPrivacy: () => void;
   onAuth: () => void;
+  onWordsAdmin?: () => void;
   authLabel?: string | null;
   isNative: boolean;
+  showWordsAdmin?: boolean;
 }) {
   return (
     <Shell open={open} onClose={onClose} title="الإعدادات">
@@ -267,6 +271,15 @@ export function SettingsModal({
       >
         {authLabel ? `الحساب · ${authLabel}` : "تسجيل الدخول / إنشاء حساب"}
       </button>
+      {showWordsAdmin && onWordsAdmin && (
+        <button
+          type="button"
+          onClick={onWordsAdmin}
+          className="mt-2 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg"
+        >
+          لوحة الكلمات
+        </button>
+      )}
       {!isNative && (
         <button
           type="button"

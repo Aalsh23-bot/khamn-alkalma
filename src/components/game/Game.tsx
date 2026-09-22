@@ -17,6 +17,7 @@ import {
   StatsModal,
 } from "./Modals";
 import { AuthModal } from "./AuthModal";
+import { WordsAdminModal } from "./WordsAdminModal";
 import { unlockAudio } from "@/lib/game/audio";
 import { achievementById } from "@/lib/game/achievements";
 import { shareChallengeInvite } from "@/lib/game/share";
@@ -26,6 +27,7 @@ import { useGame } from "@/lib/game/store";
 import { STAGE_COUNT } from "@/lib/game/words";
 import { isNativeApp } from "@/lib/native";
 import { showRewardedAd } from "@/lib/ads/ads";
+import { fetchIsAppAdmin } from "@/lib/supabase/api";
 import { useSupabaseAuth } from "@/lib/supabase/use-auth";
 import { RewardedAdOverlay } from "./RewardedAdOverlay";
 
@@ -83,6 +85,17 @@ export function Game() {
   const [adBusy, setAdBusy] = useState(false);
   const auth = useSupabaseAuth();
   const authLabel = auth.user?.displayName || auth.user?.email || null;
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!auth.user) {
+      setIsAdmin(false);
+      return;
+    }
+    void fetchIsAppAdmin()
+      .then(setIsAdmin)
+      .catch(() => setIsAdmin(false));
+  }, [auth.user]);
 
   const pendingBadge = achievements.pending[0]
     ? achievementById(achievements.pending[0])
@@ -170,8 +183,14 @@ export function Game() {
         onInstall={() => setModal("install")}
         onPrivacy={() => setModal("privacy")}
         onAuth={() => setModal("auth")}
+        onWordsAdmin={() => setModal("wordsAdmin")}
+        showWordsAdmin={isAdmin}
         authLabel={authLabel}
         isNative={isNativeApp()}
+      />
+      <WordsAdminModal
+        open={modal === "wordsAdmin"}
+        onClose={() => setModal("settings")}
       />
       <AuthModal
         open={modal === "auth"}

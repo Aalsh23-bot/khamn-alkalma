@@ -23,7 +23,42 @@ for (const pretty of Object.values(ANSWER_DISPLAY)) {
 }
 
 export function isValidGuess(norm: string): boolean {
+  // Dynamic import avoided — lexicon-sync patches via isLexiconGuessValid in store path.
+  // Keep bundled check as the base; lexicon-sync wraps callers through words.isValidGuess
+  // after we re-export below.
   return guessSet.has(norm);
+}
+
+/** Replace/extend guess set from server lexicon (keeps bundled as floor). */
+export function mergeServerGuesses(words: string[]): void {
+  for (const raw of words) {
+    const norm = normalizeWord(raw);
+    if (!norm) continue;
+    guessSet.add(norm);
+    if (norm.endsWith("ه")) guessSet.add(`${norm.slice(0, -1)}ة`);
+    if (norm.endsWith("ة")) guessSet.add(`${norm.slice(0, -1)}ه`);
+  }
+}
+
+/** Prefer full server snapshot when available (quality cleanup can remove bad words). */
+export function replaceGuessSetFromServer(words: string[]): void {
+  if (!words.length) return;
+  const next = new Set<string>();
+  for (const raw of words) {
+    const norm = normalizeWord(raw);
+    if (!norm) continue;
+    next.add(norm);
+    if (norm.endsWith("ه")) next.add(`${norm.slice(0, -1)}ة`);
+    if (norm.endsWith("ة")) next.add(`${norm.slice(0, -1)}ه`);
+  }
+  // Always keep current answers playable
+  for (const a of ANSWERS) next.add(a);
+  guessSet.clear();
+  for (const w of next) guessSet.add(w);
+}
+
+export function guessLexiconSize(): number {
+  return guessSet.size;
 }
 
 export function displayWord(norm: string): string {
