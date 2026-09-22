@@ -27,6 +27,10 @@ export interface RoundSave {
   current: string;
   status: "playing" | "won" | "lost";
   hintUsed: boolean;
+  /** How many hint ads redeemed this round (max 2). */
+  hintCount?: number;
+  /** After a hint, must submit a guess before the next hint. */
+  hintAwaitingGuess?: boolean;
   hintedCols: number[];
   stageLevel?: number;
   /** Opaque code for friend-challenge rounds */

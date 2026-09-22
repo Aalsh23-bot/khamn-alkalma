@@ -102,6 +102,8 @@ export interface GameStore {
   current: string;
   status: "playing" | "won" | "lost";
   hintUsed: boolean;
+  hintCount: number;
+  hintAwaitingGuess: boolean;
   hintedCols: number[];
   revealing: boolean;
   shake: boolean;
@@ -172,7 +174,9 @@ function persist(get: () => GameStore) {
       evaluations: s.evaluations,
       current: s.current,
       status: s.status,
-      hintUsed: s.hintUsed,
+      hintUsed: s.hintCount >= MAX_HINTS_PER_ROUND,
+      hintCount: s.hintCount,
+      hintAwaitingGuess: s.hintAwaitingGuess,
       hintedCols: s.hintedCols,
       stageLevel: s.stageLevel,
       challengeCode: s.challengeCode ?? undefined,
@@ -181,6 +185,8 @@ function persist(get: () => GameStore) {
     /* storage blocked */
   }
 }
+
+export const MAX_HINTS_PER_ROUND = 2;
 
 function freshDaily() {
   const dateKey = localDateKey();
@@ -195,6 +201,8 @@ function freshDaily() {
     current: "",
     status: "playing" as const,
     hintUsed: false,
+    hintCount: 0,
+    hintAwaitingGuess: false,
     hintedCols: [] as number[],
     revealing: false,
     shake: false,
@@ -215,6 +223,8 @@ function freshStage(level: number, order: number[]) {
     current: "",
     status: "playing" as const,
     hintUsed: false,
+    hintCount: 0,
+    hintAwaitingGuess: false,
     hintedCols: [] as number[],
     revealing: false,
     shake: false,
@@ -235,6 +245,8 @@ function freshChallenge(answer: string, code: string) {
     current: "",
     status: "playing" as const,
     hintUsed: false,
+    hintCount: 0,
+    hintAwaitingGuess: false,
     hintedCols: [] as number[],
     revealing: false,
     shake: false,
@@ -252,6 +264,13 @@ function roundFromSave(
     challengeCode?: string | null;
   },
 ) {
+  const hintCount = Math.min(
+    MAX_HINTS_PER_ROUND,
+    Math.max(
+      0,
+      saved.hintCount ?? (saved.hintUsed ? 1 : 0),
+    ),
+  );
   return {
     ...extras,
     answer: saved.answer,
@@ -259,7 +278,9 @@ function roundFromSave(
     evaluations: saved.evaluations,
     current: saved.status === "playing" ? saved.current : "",
     status: saved.status,
-    hintUsed: saved.hintUsed,
+    hintCount,
+    hintUsed: hintCount >= MAX_HINTS_PER_ROUND,
+    hintAwaitingGuess: Boolean(saved.hintAwaitingGuess),
     hintedCols: saved.hintedCols ?? [],
     revealing: false,
     shake: false,
@@ -754,6 +775,7 @@ export const useGame = create<GameStore>((set, get) => ({
       revealing: true,
       shake: false,
       toast: null,
+      hintAwaitingGuess: false,
     });
     persist(get);
   },
@@ -857,12 +879,18 @@ export const useGame = create<GameStore>((set, get) => ({
       s.screen !== "play" ||
       s.status !== "playing" ||
       s.revealing ||
-      s.hintUsed
+      s.hintCount >= MAX_HINTS_PER_ROUND ||
+      s.hintAwaitingGuess
     )
       return;
     if (s.mode === "daily") {
       const saved = loadRound("daily");
-      if (saved?.hintUsed && saved.dateKey === s.dateKey) return;
+      if (
+        saved?.dateKey === s.dateKey &&
+        (saved.hintCount ?? (saved.hintUsed ? 1 : 0)) >= MAX_HINTS_PER_ROUND
+      ) {
+        return;
+      }
     }
     const known = new Set<number>();
     for (let g = 0; g < s.guesses.length; g++) {
@@ -879,8 +907,11 @@ export const useGame = create<GameStore>((set, get) => ({
       return;
     }
     const col = unknown[0]!;
+    const hintCount = s.hintCount + 1;
     set({
-      hintUsed: true,
+      hintCount,
+      hintUsed: hintCount >= MAX_HINTS_PER_ROUND,
+      hintAwaitingGuess: true,
       hintedCols: [...s.hintedCols, col],
       toast: `الحرف في الموضع ${col + 1} هو «${s.answer[col]}»`,
     });

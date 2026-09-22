@@ -45,6 +45,7 @@ export function Header({
   onShareChallenge,
   hintUsed,
   hintDisabled,
+  hintAwaitingGuess,
 }: {
   mode: Mode;
   stageLevel: number;
@@ -56,7 +57,14 @@ export function Header({
   onShareChallenge?: () => void;
   hintUsed: boolean;
   hintDisabled: boolean;
+  hintAwaitingGuess?: boolean;
 }) {
+  const hintLabel = hintUsed
+    ? "استُخدم التلميحان"
+    : hintAwaitingGuess
+      ? "أدخل تخميناً ثم استخدم التلميح مرة أخرى"
+      : "كشف حرف مقابل إعلان";
+
   return (
     <header className="flex items-center justify-between gap-1 border-b border-line px-1 py-1">
       <div className="flex shrink-0 items-center">
@@ -85,9 +93,9 @@ export function Header({
           </IconBtn>
         )}
         <IconBtn
-          label={hintUsed ? "استُخدم التلميح" : "كشف حرف مقابل إعلان"}
+          label={hintLabel}
           onClick={onHint}
-          active={hintUsed}
+          active={hintUsed || Boolean(hintAwaitingGuess)}
           disabled={hintDisabled}
         >
           <Lightbulb className="size-5" strokeWidth={1.8} />

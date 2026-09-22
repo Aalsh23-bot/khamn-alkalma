@@ -62,6 +62,7 @@ export function Game() {
   const shake = useGame((s) => s.shake);
   const hintedCols = useGame((s) => s.hintedCols);
   const hintUsed = useGame((s) => s.hintUsed);
+  const hintAwaitingGuess = useGame((s) => s.hintAwaitingGuess);
   const toast = useGame((s) => s.toast);
   const modal = useGame((s) => s.modal);
   const settings = useGame((s) => s.settings);
@@ -352,7 +353,7 @@ export function Game() {
         }
         onHint={() => {
           void (async () => {
-            if (adBusy || hintUsed || inputLocked) return;
+            if (adBusy || hintUsed || hintAwaitingGuess || inputLocked) return;
             setAdBusy(true);
             try {
               const result = await showRewardedAd("hint");
@@ -365,7 +366,8 @@ export function Game() {
           })();
         }}
         hintUsed={hintUsed}
-        hintDisabled={inputLocked || hintUsed || adBusy}
+        hintAwaitingGuess={hintAwaitingGuess}
+        hintDisabled={inputLocked || hintUsed || hintAwaitingGuess || adBusy}
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col">
