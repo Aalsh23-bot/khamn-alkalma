@@ -6,7 +6,9 @@ import { Keyboard } from "./Keyboard";
 import { StagesSelect } from "./StagesSelect";
 import {
   BadgeModal,
+  ChallengeHubModal,
   ChallengeInviteModal,
+  ChallengeJoinModal,
   HelpModal,
   InstallModal,
   PrivacyModal,
@@ -17,6 +19,7 @@ import {
 import { AuthModal } from "./AuthModal";
 import { unlockAudio } from "@/lib/game/audio";
 import { achievementById } from "@/lib/game/achievements";
+import { shareChallengeInvite } from "@/lib/game/share";
 import { buildKeyMap } from "@/lib/game/evaluate";
 import { isArabicLetter } from "@/lib/game/normalize";
 import { useGame } from "@/lib/game/store";
@@ -38,6 +41,12 @@ export function Game() {
   const startStage = useGame((s) => s.startStage);
   const startChallenge = useGame((s) => s.startChallenge);
   const newChallenge = useGame((s) => s.newChallenge);
+  const createOnlineChallenge = useGame((s) => s.createOnlineChallenge);
+  const joinChallengeWithCode = useGame((s) => s.joinChallengeWithCode);
+  const refreshChallengeLobby = useGame((s) => s.refreshChallengeLobby);
+  const challengeExpiresAt = useGame((s) => s.challengeExpiresAt);
+  const challengeLobby = useGame((s) => s.challengeLobby);
+  const challengeRole = useGame((s) => s.challengeRole);
   const nextStage = useGame((s) => s.nextStage);
   const retryStage = useGame((s) => s.retryStage);
   const reviveAfterLoss = useGame((s) => s.reviveAfterLoss);
@@ -190,7 +199,10 @@ export function Game() {
         stageLevel={stageLevel}
         hardMode={settings.hardMode}
         challengeCode={challengeCode}
+        challengeLobby={challengeLobby}
+        challengeRole={challengeRole}
         adBusy={adBusy}
+        onRefreshChallenge={refreshChallengeLobby}
         onWatchAdRevive={() => {
           void (async () => {
             if (adBusy) return;
@@ -242,8 +254,25 @@ export function Game() {
       <ChallengeInviteModal
         open={modal === "challengeInvite" && Boolean(challengeCode)}
         code={challengeCode ?? ""}
+        expiresAt={challengeExpiresAt}
+        waiting
         onClose={() => setModal(null)}
-        onPlay={() => setModal(null)}
+        onCopyCode={() => undefined}
+        onShare={() => {
+          if (challengeCode) void shareChallengeInvite(challengeCode);
+        }}
+        onRefresh={refreshChallengeLobby}
+      />
+      <ChallengeHubModal
+        open={modal === "challengeHub"}
+        onClose={() => setModal(null)}
+        onCreate={() => createOnlineChallenge()}
+        onJoin={() => setModal("challengeJoin")}
+      />
+      <ChallengeJoinModal
+        open={modal === "challengeJoin"}
+        onClose={() => setModal(null)}
+        onSubmit={(code) => joinChallengeWithCode(code)}
       />
       <InstallModal open={modal === "install"} onClose={() => setModal(null)} />
       <PrivacyModal open={modal === "privacy"} onClose={() => setModal(null)} />

@@ -25,10 +25,16 @@ export {
 export { useSupabaseAuth } from "./use-auth";
 export {
   createServerChallenge,
+  fetchChallengeLobby,
   fetchDailyMeta,
   fetchFriendChallenge,
   fetchLeaderboard,
+  joinFriendChallenge,
+  submitChallengeResult,
   submitDailyResult,
+  challengeOutcome,
+  challengeSideForRole,
+  type ChallengeLobby,
   type DailyMeta,
   type LeaderboardRow,
   type SubmitDailyResult,

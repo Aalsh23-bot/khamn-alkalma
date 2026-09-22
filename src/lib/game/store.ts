@@ -14,22 +14,23 @@ import {
 import type { AchievementsSave } from "./achievements";
 import {
   clearChallengeCodeFromUrl,
-  decodeChallenge,
-  encodeChallenge,
-  randomChallengeAnswer,
   readChallengeCodeFromLocation,
 } from "./challenge";
 import {
   loadAchievements,
+  loadChallengeStats,
   loadRound,
   loadSettings,
   loadStages,
   loadStats,
   saveAchievements,
+  saveChallengeStats,
+  applyChallengeMatchResult,
   saveRound,
   saveSettings,
   saveStages,
   saveStats,
+  type ChallengeStatsSave,
   type Mode,
   type Screen,
   type SettingsSave,
@@ -37,7 +38,17 @@ import {
   type StatsSave,
 } from "./storage";
 import * as sfx from "./audio";
-import { submitDailyResult, createServerChallenge, fetchFriendChallenge } from "@/lib/supabase/api";
+import {
+  challengeOutcome,
+  challengeSideForRole,
+  createServerChallenge,
+  fetchChallengeLobby,
+  joinFriendChallenge,
+  submitChallengeResult,
+  submitDailyResult,
+  type ChallengeLobby,
+} from "@/lib/supabase/api";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 function syncDailyResult(guesses: string[], won: boolean, hardMode: boolean) {
   void submitDailyResult({ guesses, won, hardMode }).catch(() => {
@@ -45,15 +56,15 @@ function syncDailyResult(guesses: string[], won: boolean, hardMode: boolean) {
   });
 }
 
-async function resolveChallengeAnswer(code: string): Promise<string | null> {
-  const local = decodeChallenge(code);
-  if (local) return local;
-  try {
-    const remote = await fetchFriendChallenge(code);
-    return remote?.word ?? null;
-  } catch {
-    return null;
-  }
+function mapChallengeError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("not authenticated")) return "سجّل الدخول أولاً لتحدّي الأصدقاء";
+  if (m.includes("expired")) return "انتهت صلاحية كود التحدّي";
+  if (m.includes("not found")) return "كود التحدّي غير موجود";
+  if (m.includes("full")) return "هذا التحدّي ممتلئ";
+  if (m.includes("not joinable")) return "لا يمكن الانضمام لهذا التحدّي";
+  if (m.includes("waiting for opponent")) return "بانتظار صديقك…";
+  return message || "تعذّر إكمال التحدّي";
 }
 
 export type { Mode, Screen };
@@ -79,15 +90,35 @@ export interface GameStore {
   stats: StatsSave;
   stages: StagesSave;
   achievements: AchievementsSave;
+  challengeStats: ChallengeStatsSave;
   challengeCode: string | null;
-  modal: "help" | "stats" | "settings" | "result" | "install" | "privacy" | "badge" | "challengeInvite" | "auth" | null;
+  challengeRole: "host" | "guest" | null;
+  challengeExpiresAt: string | null;
+  challengeLobby: ChallengeLobby | null;
+  modal:
+    | "help"
+    | "stats"
+    | "settings"
+    | "result"
+    | "install"
+    | "privacy"
+    | "badge"
+    | "challengeInvite"
+    | "challengeHub"
+    | "challengeJoin"
+    | "auth"
+    | null;
   hydrate: () => void;
   goHome: () => void;
   openStages: () => void;
   startDaily: () => void;
   startStage: (level: number) => void;
-  /** Create or resume a friend challenge; pass code to join a shared link. */
+  /** Open challenge hub, or join with a shared code. */
   startChallenge: (code?: string) => void;
+  openChallengeHub: () => void;
+  joinChallengeWithCode: (code: string) => void;
+  createOnlineChallenge: () => void;
+  refreshChallengeLobby: () => void;
   nextStage: () => void;
   retryStage: () => void;
   /** After a loss: undo last guess (call only after rewarded ad). */
@@ -226,6 +257,103 @@ function unlockAchievements(
   return next;
 }
 
+
+function beginOnlineMatch(
+  set: (partial: Partial<GameStore>) => void,
+  get: () => GameStore,
+  word: string,
+  code: string,
+  role: "host" | "guest",
+  lobby?: ChallengeLobby | null,
+) {
+  set({
+    screen: "play",
+    ...freshChallenge(word, code),
+    challengeRole: role,
+    challengeLobby: lobby ?? null,
+    modal: null,
+    toast: "التحدّي بدأ — نفس الكلمة ونفس الوقت",
+    revealing: false,
+    shake: false,
+  });
+  persist(get);
+}
+
+function applyLobbyToStore(
+  set: (partial: Partial<GameStore>) => void,
+  get: () => GameStore,
+  lobby: ChallengeLobby,
+) {
+  const s = get();
+  const patch: Partial<GameStore> = {
+    challengeLobby: lobby,
+    challengeExpiresAt: lobby.expires_at,
+    challengeRole: lobby.role,
+    challengeCode: lobby.code,
+  };
+
+  if (
+    lobby.status === "active" &&
+    lobby.word &&
+    (s.screen !== "play" || s.mode !== "challenge" || !s.answer)
+  ) {
+    beginOnlineMatch(set, get, lobby.word, lobby.code, lobby.role, lobby);
+    return;
+  }
+
+  if (lobby.status === "expired" && s.modal === "challengeInvite") {
+    set({
+      ...patch,
+      toast: "انتهت صلاحية الكود — أنشئ تحدّياً جديداً",
+      modal: null,
+      challengeCode: null,
+      challengeRole: null,
+    });
+    return;
+  }
+
+  set(patch);
+
+  if (lobby.status === "done" || (lobby.host_finished && lobby.guest_finished)) {
+    const me = challengeSideForRole(lobby, lobby.role);
+    const oppRole = lobby.role === "host" ? "guest" : "host";
+    const opp = challengeSideForRole(lobby, oppRole);
+    const outcome = challengeOutcome(me, opp);
+    if (outcome === "pending") return;
+
+    let challengeStats = get().challengeStats;
+    let counted = false;
+    try {
+      counted =
+        typeof sessionStorage !== "undefined" &&
+        sessionStorage.getItem(`khamsa:ch-counted:${lobby.code}`) === "1";
+    } catch {
+      counted = false;
+    }
+    if (!counted) {
+      challengeStats = applyChallengeMatchResult(challengeStats, outcome);
+      saveChallengeStats(challengeStats);
+      try {
+        sessionStorage.setItem(`khamsa:ch-counted:${lobby.code}`, "1");
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const achievements = unlockAchievements(get().achievements, {
+      stats: get().stats,
+      stages: get().stages,
+      challengeStats,
+      won: !!me.won,
+      guessCount: me.guesses ?? get().guesses.length,
+      stageLevel: 0,
+      mode: "challenge",
+      challengeOutcome: outcome,
+    });
+    set({ challengeStats, achievements, challengeLobby: lobby });
+  }
+}
+
 export const useGame = create<GameStore>((set, get) => ({
   hydrated: false,
   screen: "home",
@@ -235,6 +363,10 @@ export const useGame = create<GameStore>((set, get) => ({
   stats: loadStats(),
   stages: loadStages(),
   achievements: loadAchievements(),
+  challengeStats: loadChallengeStats(),
+  challengeRole: null,
+  challengeExpiresAt: null,
+  challengeLobby: null,
   modal: null,
 
   hydrate: () => {
@@ -243,41 +375,26 @@ export const useGame = create<GameStore>((set, get) => ({
     const stats = loadStats();
     const stages = loadStages();
     const achievements = loadAchievements();
+    const challengeStats = loadChallengeStats();
     sfx.setSoundEnabled(settings.sound);
 
     const inviteCode = readChallengeCodeFromLocation();
     if (inviteCode) {
       clearChallengeCodeFromUrl();
-      void (async () => {
-        const answer = await resolveChallengeAnswer(inviteCode);
-        if (answer) {
-          set({
-            hydrated: true,
-            settings,
-            stats,
-            stages,
-            achievements,
-            screen: "play",
-            ...freshChallenge(answer, inviteCode),
-            modal: null,
-            toast: "تحدّي الأصدقاء — نفس الكلمة",
-            revealing: false,
-            shake: false,
-          });
-          persist(get);
-          return;
-        }
-        set({
-          hydrated: true,
-          screen: "home",
-          settings,
-          stats,
-          stages,
-          achievements,
-          modal: null,
-          toast: "رابط التحدّي غير صالح",
-        });
-      })();
+      set({
+        hydrated: true,
+        settings,
+        stats,
+        stages,
+        achievements,
+        challengeStats,
+        screen: "home",
+        modal: null,
+        toast: null,
+        revealing: false,
+        shake: false,
+      });
+      get().joinChallengeWithCode(inviteCode);
       return;
     }
 
@@ -288,6 +405,7 @@ export const useGame = create<GameStore>((set, get) => ({
       stats,
       stages,
       achievements,
+      challengeStats,
       modal: achievements.pending.length ? "badge" : null,
       toast: null,
       revealing: false,
@@ -341,25 +459,10 @@ export const useGame = create<GameStore>((set, get) => ({
   startChallenge: (code) => {
     commitPendingDailyLoss(get);
     persist(get);
-
     if (code) {
-      void (async () => {
-        const answer = await resolveChallengeAnswer(code);
-        if (!answer) {
-          set({ toast: "رابط التحدّي غير صالح", screen: "home", modal: null });
-          return;
-        }
-        set({
-          screen: "play",
-          ...freshChallenge(answer, code),
-          modal: null,
-          toast: "تحدّي الأصدقاء — نفس الكلمة",
-        });
-        persist(get);
-      })();
+      get().joinChallengeWithCode(code);
       return;
     }
-
     const saved = loadRound("challenge");
     if (saved?.answer && saved.status === "playing" && saved.challengeCode) {
       set({
@@ -375,10 +478,70 @@ export const useGame = create<GameStore>((set, get) => ({
         toast: null,
         revealing: false,
       });
+      get().refreshChallengeLobby();
       return;
     }
+    get().openChallengeHub();
+  },
 
+  openChallengeHub: () => {
+    if (!isSupabaseConfigured()) {
+      set({ toast: "التحدّي الأونلاين يحتاج اتصال وإعداد Supabase", modal: null });
+      return;
+    }
+    set({ modal: "challengeHub", toast: null });
+  },
+
+  createOnlineChallenge: () => {
     get().newChallenge();
+  },
+
+  joinChallengeWithCode: (raw) => {
+    const code = raw.trim().toUpperCase();
+    if (!code) {
+      set({ toast: "أدخل كود التحدّي" });
+      return;
+    }
+    void (async () => {
+      try {
+        const joined = await joinFriendChallenge(code);
+        if (!joined?.word) {
+          set({ toast: "سجّل الدخول ثم أدخل الكود", modal: "auth" });
+          return;
+        }
+        const lobby = await fetchChallengeLobby(joined.code).catch(() => null);
+        beginOnlineMatch(
+          set,
+          get,
+          joined.word,
+          joined.code,
+          joined.role,
+          lobby,
+        );
+      } catch (e) {
+        set({
+          toast: mapChallengeError(e instanceof Error ? e.message : ""),
+          modal: "challengeJoin",
+        });
+      }
+    })();
+  },
+
+  refreshChallengeLobby: () => {
+    const code = get().challengeCode;
+    if (!code) return;
+    void (async () => {
+      try {
+        const lobby = await fetchChallengeLobby(code);
+        if (lobby) applyLobbyToStore(set, get, lobby);
+      } catch (e) {
+        if (get().modal === "challengeInvite") {
+          set({
+            toast: mapChallengeError(e instanceof Error ? e.message : ""),
+          });
+        }
+      }
+    })();
   },
 
   newChallenge: () => {
@@ -386,29 +549,30 @@ export const useGame = create<GameStore>((set, get) => ({
     persist(get);
     void (async () => {
       try {
-        const server = await createServerChallenge();
-        if (server?.code && server.word) {
-          set({
-            screen: "play",
-            ...freshChallenge(server.word, server.code),
-            modal: "challengeInvite",
-            toast: null,
-          });
-          persist(get);
+        if (!isSupabaseConfigured()) {
+          set({ toast: "التحدّي الأونلاين يحتاج إعداد Supabase", modal: null });
           return;
         }
-      } catch {
-        /* fall back to local */
+        const server = await createServerChallenge();
+        if (!server?.code) {
+          set({ toast: "سجّل الدخول لإنشاء تحدّي", modal: "auth" });
+          return;
+        }
+        set({
+          screen: "home",
+          challengeCode: server.code,
+          challengeRole: "host",
+          challengeExpiresAt: server.expires_at,
+          challengeLobby: null,
+          modal: "challengeInvite",
+          toast: null,
+        });
+      } catch (e) {
+        set({
+          toast: mapChallengeError(e instanceof Error ? e.message : ""),
+          modal: "auth",
+        });
       }
-      const answer = randomChallengeAnswer();
-      const code = encodeChallenge(answer);
-      set({
-        screen: "play",
-        ...freshChallenge(answer, code),
-        modal: "challengeInvite",
-        toast: null,
-      });
-      persist(get);
     })();
   },
 
@@ -624,10 +788,11 @@ export const useGame = create<GameStore>((set, get) => ({
       const status = won ? "won" : lost ? "lost" : "playing";
 
       let achievements = s.achievements;
-      if (won || lost) {
+      if ((won || lost) && s.mode !== "challenge") {
         achievements = unlockAchievements(s.achievements, {
           stats,
           stages,
+          challengeStats: s.challengeStats,
           won: !!won,
           guessCount: s.guesses.length,
           stageLevel: s.mode === "stages" ? Math.max(s.stageLevel, stages.unlocked) : stages.unlocked,
@@ -643,6 +808,21 @@ export const useGame = create<GameStore>((set, get) => ({
         modal: won || lost ? "result" : null,
       });
       persist(get);
+
+      if ((won || lost) && s.mode === "challenge" && s.challengeCode) {
+        void (async () => {
+          try {
+            const lobby = await submitChallengeResult({
+              code: s.challengeCode!,
+              guesses: get().guesses,
+              won: !!won,
+            });
+            if (lobby) applyLobbyToStore(set, get, lobby);
+          } catch {
+            /* keep local result UI; lobby poll may retry */
+          }
+        })();
+      }
     } catch {
       set({ revealing: false });
     }

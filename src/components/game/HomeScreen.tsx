@@ -139,7 +139,7 @@ export function HomeScreen({
                 ? "متابعة التحدّي الحالي"
                 : "كلمة عشوائية مشتركة عبر رابط"
             }
-            meta={challengeMid ? "متابعة" : "أنشئ تحدّي"}
+            meta={challengeMid ? "متابعة" : "كود أونلاين"}
             onClick={onChallenge}
           />
         </div>

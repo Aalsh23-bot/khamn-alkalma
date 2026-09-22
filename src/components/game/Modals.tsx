@@ -8,11 +8,15 @@ import {
   msUntilTomorrow,
 } from "@/lib/game/daily";
 import { ACHIEVEMENTS, type AchievementsSave } from "@/lib/game/achievements";
-import { challengeAbsoluteUrl } from "@/lib/game/challenge";
 import { shareChallengeInvite, shareOrCopy, shareText } from "@/lib/game/share";
 import { solutionLabel, type Mode } from "@/lib/game/store";
 import { STAGE_COUNT } from "@/lib/game/words";
 import type { SettingsSave, StatsSave } from "@/lib/game/storage";
+import {
+  challengeOutcome,
+  challengeSideForRole,
+  type ChallengeLobby,
+} from "@/lib/supabase/api";
 import { cn } from "@/lib/utils";
 import { WinCalendar } from "./WinCalendar";
 import { LeaderboardPanel } from "./LeaderboardPanel";
@@ -337,6 +341,8 @@ export function ResultModal({
   stageLevel,
   hardMode,
   challengeCode,
+  challengeLobby,
+  challengeRole,
   onAgain,
   onMap,
   onHome,
@@ -344,6 +350,7 @@ export function ResultModal({
   onWatchAdRevive,
   onRetryNewWord,
   onNewChallenge,
+  onRefreshChallenge,
   adBusy,
 }: {
   open: boolean;
@@ -358,6 +365,8 @@ export function ResultModal({
   stageLevel: number;
   hardMode: boolean;
   challengeCode?: string | null;
+  challengeLobby?: ChallengeLobby | null;
+  challengeRole?: "host" | "guest" | null;
   onAgain: () => void;
   onMap: () => void;
   onHome: () => void;
@@ -365,6 +374,7 @@ export function ResultModal({
   onWatchAdRevive?: () => void;
   onRetryNewWord?: () => void;
   onNewChallenge?: () => void;
+  onRefreshChallenge?: () => void;
   adBusy?: boolean;
 }) {
   const won = status === "won";
@@ -377,6 +387,22 @@ export function ResultModal({
     const id = window.setInterval(() => setRemain(msUntilTomorrow()), 1000);
     return () => window.clearInterval(id);
   }, [open, mode]);
+
+  useEffect(() => {
+    if (!open || mode !== "challenge" || !onRefreshChallenge) return;
+    onRefreshChallenge();
+    const id = window.setInterval(() => onRefreshChallenge(), 2500);
+    return () => window.clearInterval(id);
+  }, [open, mode, onRefreshChallenge]);
+
+  const challengeCompare = (() => {
+    if (mode !== "challenge" || !challengeLobby || !challengeRole) return null;
+    const me = challengeSideForRole(challengeLobby, challengeRole);
+    const oppRole = challengeRole === "host" ? "guest" : "host";
+    const opp = challengeSideForRole(challengeLobby, oppRole);
+    const outcome = challengeOutcome(me, opp);
+    return { me, opp, outcome, oppName: challengeLobby.opponent_name };
+  })();
 
   async function onShare() {
     const text = shareText({
@@ -457,6 +483,44 @@ export function ResultModal({
           </div>
         ))}
       </div>
+
+      {challengeCompare && (
+        <div className="mt-5 rounded-xl bg-bg px-4 py-3 text-sm">
+          <p className="font-medium text-fg">نتيجة التحدّي</p>
+          <div className="mt-2 flex justify-between gap-3 text-muted">
+            <span>أنت</span>
+            <span className="tabular-nums text-fg">
+              {challengeCompare.me.won
+                ? `${challengeCompare.me.guesses}/6`
+                : "لم تُحل"}
+            </span>
+          </div>
+          <div className="mt-1 flex justify-between gap-3 text-muted">
+            <span>{challengeCompare.oppName || "صديقك"}</span>
+            <span className="tabular-nums text-fg">
+              {!challengeCompare.opp.finished
+                ? "للحين ما خلّص"
+                : challengeCompare.opp.won
+                  ? `${challengeCompare.opp.guesses}/6`
+                  : "لم تُحل"}
+            </span>
+          </div>
+          {challengeCompare.outcome !== "pending" && (
+            <p className="mt-3 text-center font-semibold text-accent">
+              {challengeCompare.outcome === "win"
+                ? "فزت بالتحدّي"
+                : challengeCompare.outcome === "loss"
+                  ? "صديقك فاز"
+                  : "تعادل"}
+            </p>
+          )}
+          {challengeCompare.outcome === "pending" && (
+            <p className="mt-3 text-center text-xs text-muted">
+              النتيجة النهائية تظهر لما يخلّص صديقك
+            </p>
+          )}
+        </div>
+      )}
 
       {mode === "daily" && won && (
         <div className="mt-5 rounded-xl bg-bg px-4 py-3 text-center">
@@ -606,73 +670,172 @@ export function BadgeModal({
 export function ChallengeInviteModal({
   open,
   code,
+  expiresAt,
+  waiting,
   onClose,
-  onPlay,
+  onCopyCode,
+  onShare,
+  onRefresh,
 }: {
   open: boolean;
   code: string;
+  expiresAt: string | null;
+  waiting: boolean;
   onClose: () => void;
-  onPlay: () => void;
+  onCopyCode: () => void;
+  onShare: () => void;
+  onRefresh: () => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const url = code ? challengeAbsoluteUrl(code) : "";
+  const [remainMs, setRemainMs] = useState(0);
 
-  async function onShare() {
+  useEffect(() => {
+    if (!open || !expiresAt) return;
+    const tick = () => {
+      setRemainMs(Math.max(0, new Date(expiresAt).getTime() - Date.now()));
+    };
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [open, expiresAt]);
+
+  useEffect(() => {
+    if (!open || !waiting) return;
+    onRefresh();
+    const id = window.setInterval(() => onRefresh(), 2000);
+    return () => window.clearInterval(id);
+  }, [open, waiting, onRefresh]);
+
+  async function copyCode() {
     if (!code) return;
     try {
-      const how = await shareChallengeInvite(code);
+      await navigator.clipboard.writeText(code);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-      void how;
-    } catch {
-      /* cancelled */
-    }
-  }
-
-  async function onCopyLink() {
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
+      onCopyCode();
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
       /* ignore */
     }
   }
 
+  const remainLabel =
+    remainMs > 0
+      ? `${Math.floor(remainMs / 60000)}:${String(Math.floor((remainMs % 60000) / 1000)).padStart(2, "0")}`
+      : "انتهى";
+
   return (
     <Shell open={open} onClose={onClose} title="تحدّي الأصدقاء">
       <p className="text-sm leading-6 text-muted">
-        جاهز! شارك الرابط مع أصحابك — كل واحد يلعب نفس الكلمة ويقارن المحاولات.
+        انسخ الكود وأرسله لصديقك. التحدّي يبدأ تلقائياً لما يدخل الكود.
       </p>
-      <div className="mt-4 break-all rounded-xl bg-bg px-3 py-3 text-center text-xs leading-5 text-fg" dir="ltr">
-        {url || "…"}
+      <div className="mt-4 rounded-2xl bg-bg px-4 py-5 text-center shadow-[var(--shadow-border)]">
+        <p className="text-xs text-muted">كود التحدّي</p>
+        <p
+          className="mt-2 font-display text-3xl font-semibold tracking-[0.25em] text-fg"
+          dir="ltr"
+        >
+          {code || "……"}
+        </p>
+        <p className="mt-3 text-xs text-muted">
+          {waiting ? `بانتظار صديقك · متبقي ${remainLabel}` : "جاري التحضير…"}
+        </p>
       </div>
       <div className="mt-4 flex flex-col gap-2">
         <button
           type="button"
-          onClick={() => void onShare()}
+          onClick={() => void copyCode()}
           className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-accent-fg"
         >
-          <Share2 className="size-4" />
-          {copied ? "تم!" : "شارك الرابط"}
+          <Copy className="size-4" />
+          {copied ? "تم نسخ الكود" : "نسخ الكود"}
         </button>
         <button
           type="button"
-          onClick={() => void onCopyLink()}
+          onClick={() => void onShare()}
           className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-key text-sm font-medium text-fg"
         >
-          <Copy className="size-4" />
-          نسخ الرابط
+          <Share2 className="size-4" />
+          مشاركة الرابط
         </button>
         <button
           type="button"
-          onClick={onPlay}
-          className="flex h-12 w-full items-center justify-center rounded-xl bg-fg text-sm font-semibold text-bg"
+          onClick={onClose}
+          className="flex h-11 w-full items-center justify-center text-sm text-muted"
         >
-          ابدأ اللعب
+          إلغاء
         </button>
       </div>
+    </Shell>
+  );
+}
+
+export function ChallengeHubModal({
+  open,
+  onClose,
+  onCreate,
+  onJoin,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreate: () => void;
+  onJoin: () => void;
+}) {
+  return (
+    <Shell open={open} onClose={onClose} title="تحدّي الأصدقاء">
+      <p className="text-sm leading-6 text-muted">
+        تحدّي أونلاين فقط — تحتاج تسجيل الدخول. أنشئ كوداً أو ادخل كود صديقك.
+      </p>
+      <div className="mt-4 flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={onCreate}
+          className="flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg"
+        >
+          أنشئ تحدّي
+        </button>
+        <button
+          type="button"
+          onClick={onJoin}
+          className="flex h-12 w-full items-center justify-center rounded-xl bg-key text-sm font-medium text-fg"
+        >
+          عندي كود — انضم
+        </button>
+      </div>
+    </Shell>
+  );
+}
+
+export function ChallengeJoinModal({
+  open,
+  onClose,
+  onSubmit,
+  busy,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (code: string) => void;
+  busy?: boolean;
+}) {
+  const [code, setCode] = useState("");
+  return (
+    <Shell open={open} onClose={onClose} title="ادخل كود التحدّي">
+      <input
+        className="mt-1 h-12 w-full rounded-xl border border-line bg-bg px-3 text-center text-lg font-semibold tracking-[0.2em] text-fg outline-none focus:border-accent"
+        value={code}
+        onChange={(e) => setCode(e.target.value.toUpperCase())}
+        placeholder="ABC123"
+        dir="ltr"
+        autoCapitalize="characters"
+        maxLength={12}
+      />
+      <button
+        type="button"
+        disabled={busy || code.trim().length < 4}
+        onClick={() => onSubmit(code.trim())}
+        className="mt-4 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
+      >
+        ابدأ التحدّي
+      </button>
     </Shell>
   );
 }

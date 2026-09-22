@@ -48,7 +48,10 @@ https://supabase.com/dashboard/project/eqxaivexuowngyigmqwl/auth/users
 |-----|---------|
 | `get_daily_meta` | رقم لغز اليوم بدون كشف الإجابة |
 | `submit_daily_result` | تحقق + Anti-cheat + نتائج + Leaderboard |
-| `create_friend_challenge` | تحدّي صديق على السيرفر |
+| `create_friend_challenge` | إنشاء غرفة تحدّي (كود + ١٠ دقائق) |
+| `join_friend_challenge` | انضمام بالكود وبدء المباراة |
+| `get_challenge_lobby` | حالة الانتظار / النتائج |
+| `submit_challenge_result` | تسليم نتيجة التحدّي |
 | `get_leaderboard` | لوحة الصدارة |
 | `evaluate_guess` | تقييم تخمين (Wordle) |
 
