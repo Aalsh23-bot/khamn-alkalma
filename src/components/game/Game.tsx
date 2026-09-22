@@ -175,6 +175,7 @@ export function Game() {
         clearError={auth.clearError}
         signIn={auth.signIn}
         signUp={auth.signUp}
+        signInWithApple={auth.signInWithApple}
         signOut={auth.signOut}
       />
       <ResultModal

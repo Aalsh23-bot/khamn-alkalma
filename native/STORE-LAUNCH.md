@@ -14,6 +14,7 @@
 | Supabase في البناء | من ملف `.env` في جذر المشروع |
 | AdMob App ID (اختبار غوغل) | مضبوط في AndroidManifest + Info.plist |
 | وحدات الإعلان | تجريبية في `src/lib/ads/config.ts` |
+| Sign in with Apple (كود) | زر في شاشة الحساب على iOS + entitlements |
 
 ---
 
@@ -56,6 +57,29 @@ npx cap open android  # Android Studio
 6. في App Store Connect انسخ نصوص [`XCODE.md`](./XCODE.md)
 
 **لازم عندك:** ماك + Xcode + اشتراك Apple Developer (99$/سنة)
+
+### Sign in with Apple (مرة واحدة)
+
+الكود جاهز في التطبيق. تحتاج تفعيل المزود من جهتين:
+
+#### 1) Apple Developer
+1. [Identifiers](https://developer.apple.com/account/resources/identifiers/list) → افتح `app.khamsa.game`
+2. فعّل **Sign In with Apple** → Save
+3. (اختياري للويب لاحقاً) أنشئ Services ID؛ للتطبيق الأصلي يكفي App ID
+
+#### 2) Xcode
+1. افتح `ios/App/App.xcodeproj`
+2. Target **App** → **Signing & Capabilities**
+3. تأكد أن **Sign in with Apple** ظاهرة (ملف `App.entitlements` موجود مسبقاً)
+4. Team: حساب المطوّر المدفوع (Personal Team المجاني لا يكفي لهذه القدرة على جهاز حقيقي غالباً)
+
+#### 3) Supabase Dashboard
+1. Authentication → Providers → **Apple** → Enable
+2. Client IDs: أضف `app.khamsa.game` (Bundle ID)
+3. Secret Key (JWT): أنشئه من Apple → Keys → Key بـ Sign in with Apple، ثم ولّد JWT حسب [دليل Supabase](https://supabase.com/docs/guides/auth/social-login/auth-apple#configuration-native-app)
+4. احفظ
+
+بعدها: `npm run native:sync` → شغّل على الآيفون → الحساب → **المتابعة مع Apple**
 
 ---
 
