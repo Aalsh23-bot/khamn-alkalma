@@ -1,0 +1,1 @@
+import{i as e}from"./index-CTIP-_s9.js";var t=class extends e{async show(e){}async hide(e){}};export{t as SplashScreenWeb};
