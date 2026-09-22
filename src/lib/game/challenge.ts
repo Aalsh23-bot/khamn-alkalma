@@ -74,7 +74,8 @@ export function challengeInviteText(code: string): string {
   const url = challengeAbsoluteUrl(code);
   return [
     `تحدّيتُك في ${APP_NAME}!`,
-    "نفس الكلمة — شوف مين يحلها بأقل محاولات.",
+    `الكود: ${code}`,
+    "ادخل الكود في التطبيق ونبدأ التحدّي مع بعض.",
     "",
     url,
   ].join("\n");

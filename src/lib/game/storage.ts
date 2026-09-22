@@ -63,6 +63,15 @@ export interface StagesSave {
   orderScheme?: string;
 }
 
+export interface ChallengeStatsSave {
+  version: number;
+  played: number;
+  wins: number;
+  draws: number;
+  winStreak: number;
+  maxWinStreak: number;
+}
+
 export const defaultStats = (): StatsSave => ({
   version: VERSION,
   played: 0,
@@ -88,6 +97,15 @@ export const defaultStages = (): StagesSave => ({
   completed: {},
   order: buildStageOrder(STAGE_COUNT),
   orderScheme: STAGE_ORDER_SCHEME,
+});
+
+export const defaultChallengeStats = (): ChallengeStatsSave => ({
+  version: VERSION,
+  played: 0,
+  wins: 0,
+  draws: 0,
+  winStreak: 0,
+  maxWinStreak: 0,
 });
 
 function read<T>(key: string, fallback: T): T {
@@ -240,4 +258,43 @@ export function saveStages(stages: StagesSave) {
 
 export function completedCount(stages: StagesSave): number {
   return Object.keys(stages.completed).length;
+}
+
+export function loadChallengeStats(): ChallengeStatsSave {
+  return read("khamsa:challenge-stats", defaultChallengeStats());
+}
+
+export function saveChallengeStats(stats: ChallengeStatsSave) {
+  write("khamsa:challenge-stats", { ...stats, version: VERSION });
+}
+
+/** Apply a finished match outcome (both players done). */
+export function applyChallengeMatchResult(
+  current: ChallengeStatsSave,
+  outcome: "win" | "loss" | "draw",
+): ChallengeStatsSave {
+  const played = current.played + 1;
+  if (outcome === "draw") {
+    return {
+      ...current,
+      played,
+      draws: current.draws + 1,
+      winStreak: 0,
+    };
+  }
+  if (outcome === "win") {
+    const winStreak = current.winStreak + 1;
+    return {
+      ...current,
+      played,
+      wins: current.wins + 1,
+      winStreak,
+      maxWinStreak: Math.max(current.maxWinStreak, winStreak),
+    };
+  }
+  return {
+    ...current,
+    played,
+    winStreak: 0,
+  };
 }

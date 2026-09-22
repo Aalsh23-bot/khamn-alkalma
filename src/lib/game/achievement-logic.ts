@@ -1,15 +1,18 @@
 import type { AchievementId, AchievementsSave } from "./achievements";
-import type { StagesSave, StatsSave } from "./storage";
+import type { ChallengeStatsSave, StagesSave, StatsSave } from "./storage";
 import { localDateKey } from "./daily";
 
 export interface AchievementContext {
   stats: StatsSave;
   stages: StagesSave;
-  /** Just won any mode */
+  challengeStats?: ChallengeStatsSave;
+  /** Just won any mode (solved the word) */
   won: boolean;
   guessCount: number;
   stageLevel: number;
   mode: "daily" | "stages" | "challenge";
+  /** Friend-challenge match outcome once both finished */
+  challengeOutcome?: "win" | "loss" | "draw" | "pending";
 }
 
 /** Returns newly unlocked achievement ids (not already in unlocked). */
@@ -38,6 +41,30 @@ export function evaluateNewAchievements(
   if (stageReach >= 100) unlock("stage_100");
 
   if (ctx.won && ctx.guessCount === 1) unlock("first_try");
+
+  const cs = ctx.challengeStats;
+  if (cs && cs.played > 0) unlock("challenge_first");
+  if (cs && cs.wins > 0) unlock("challenge_win");
+  if (cs && cs.wins >= 3) unlock("challenge_wins_3");
+  if (cs && cs.draws > 0) unlock("challenge_draw");
+  if (cs && (cs.winStreak >= 2 || cs.maxWinStreak >= 2)) unlock("challenge_streak_2");
+
+  if (
+    ctx.mode === "challenge" &&
+    ctx.challengeOutcome === "win" &&
+    ctx.won &&
+    ctx.guessCount <= 3
+  ) {
+    unlock("challenge_fast");
+  }
+  if (
+    ctx.mode === "challenge" &&
+    ctx.challengeOutcome === "win" &&
+    ctx.won &&
+    ctx.guessCount === 1
+  ) {
+    unlock("challenge_first_try");
+  }
 
   return next;
 }
