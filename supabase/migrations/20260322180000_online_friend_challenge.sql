@@ -1,6 +1,14 @@
 -- Online friend challenge: wait for opponent, start together, compare results.
 -- Join window: 10 minutes. Auth required for create/join/submit.
 
+-- Drop old signatures before recreate (return types changed)
+drop function if exists public.create_friend_challenge();
+drop function if exists public.get_friend_challenge(text);
+drop function if exists public.join_friend_challenge(text);
+drop function if exists public.get_challenge_lobby(text);
+drop function if exists public.submit_challenge_result(text, text[], boolean);
+drop function if exists public.expire_stale_challenges();
+
 alter table public.challenges
   add column if not exists status text not null default 'waiting'
     check (status in ('waiting', 'active', 'done', 'expired')),
