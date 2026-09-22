@@ -9,8 +9,7 @@ const config: CapacitorConfig = {
     contentInset: "automatic",
     backgroundColor: "#F3EEE4",
     preferredContentMode: "mobile",
-    scheme: "khamsa",
-    // false avoids blank WKWebView when local assets/plugins load on first run
+    // Use default Capacitor scheme — custom schemes can leave a blank WKWebView on simulator
     limitsNavigationsToAppBoundDomains: false,
   },
   android: {
