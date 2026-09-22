@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
   getSession,
+  signInWithAppleNative,
   signInWithEmail,
   signOut,
   signUpWithEmail,
@@ -82,6 +83,7 @@ export function useSupabaseAuth() {
       run(() => signInWithEmail(email, password)),
     signUp: (email: string, password: string, displayName?: string) =>
       run(() => signUpWithEmail(email, password, displayName)),
+    signInWithApple: () => run(() => signInWithAppleNative()),
     signOut: () => run(() => signOut()),
   };
 }
@@ -93,5 +95,7 @@ function mapAuthError(message: string): string {
   if (m.includes("password")) return "كلمة المرور ضعيفة (٦ أحرف على الأقل)";
   if (m.includes("email")) return "تحقق من صيغة البريد الإلكتروني";
   if (m.includes("network") || m.includes("fetch")) return "تحقق من الاتصال بالإنترنت";
+  if (m.includes("cancel") || m.includes("1001")) return "تم إلغاء تسجيل الدخول";
+  if (m.includes("apple")) return message;
   return message;
 }
