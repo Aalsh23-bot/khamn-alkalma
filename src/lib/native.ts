@@ -16,6 +16,11 @@ export function isNativeApp(): boolean {
   return Capacitor.isNativePlatform();
 }
 
+export function isIosApp(): boolean {
+  if (!isNativeApp()) return false;
+  return Capacitor.getPlatform() === "ios";
+}
+
 export async function bootstrapNative(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
 
