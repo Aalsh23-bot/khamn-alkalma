@@ -24,7 +24,8 @@
     "native:pack": "python3 scripts/pack-native.py",
     "supabase:seed-words": "node scripts/seed-supabase-words.mjs",
     "format": "prettier --write .",
-    "supabase:seed-lexicon": "node scripts/seed-guess-lexicon.mjs"
+    "supabase:seed-lexicon": "node scripts/seed-guess-lexicon.mjs",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@capacitor-community/admob": "^8.1.0",
@@ -109,6 +110,7 @@
     "globals": "^15.15.0",
     "lightningcss": "^1.28.0",
     "nitro": "3.0.260610-beta",
+    "patch-package": "^8.0.1",
     "playwright": "^1.62.0",
     "prettier": "^3.4.0",
     "typescript": "^5.7.0",

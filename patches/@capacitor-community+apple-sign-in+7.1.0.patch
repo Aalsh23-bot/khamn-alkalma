@@ -1,0 +1,21 @@
+diff --git a/node_modules/@capacitor-community/apple-sign-in/Package.swift b/node_modules/@capacitor-community/apple-sign-in/Package.swift
+index 94246df..2fbf6bf 100644
+--- a/node_modules/@capacitor-community/apple-sign-in/Package.swift
++++ b/node_modules/@capacitor-community/apple-sign-in/Package.swift
+@@ -3,14 +3,14 @@ import PackageDescription
+ 
+ let package = Package(
+     name: "CapacitorCommunityAppleSignIn",
+-    platforms: [.iOS(.v14)],
++    platforms: [.iOS(.v15)],
+     products: [
+         .library(
+             name: "CapacitorCommunityAppleSignIn",
+             targets: ["SignInWithApple"])
+     ],
+     dependencies: [
+-        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "7.0.0")
++        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "8.0.0")
+     ],
+     targets: [
+         .target(
