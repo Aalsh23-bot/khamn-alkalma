@@ -1,11 +1,11 @@
 /**
  * AdMob unit IDs.
- * Replace the production IDs after creating your AdMob apps for iOS & Android.
- * Defaults are Google's official test rewarded units so Store review / QA stays safe.
+ * iOS production IDs are live. Android still uses Google test IDs until an
+ * Android AdMob app is created.
  */
 export const ADMOB = {
-  /** Set true only after you paste real production unit IDs below. */
-  useProductionIds: false,
+  /** Production iOS IDs are wired; keep true for store builds. */
+  useProductionIds: true,
 
   android: {
     appId: "ca-app-pub-3940256099942544~3347511713",
@@ -13,9 +13,9 @@ export const ADMOB = {
     rewardedRevive: "ca-app-pub-3940256099942544/5224354917",
   },
   ios: {
-    appId: "ca-app-pub-3940256099942544~1458002511",
-    rewardedHint: "ca-app-pub-3940256099942544/1712485313",
-    rewardedRevive: "ca-app-pub-3940256099942544/1712485313",
+    appId: "ca-app-pub-9139788549801123~3810398783",
+    rewardedHint: "ca-app-pub-9139788549801123/1922602042",
+    rewardedRevive: "ca-app-pub-9139788549801123/8854841902",
   },
 } as const;
 
