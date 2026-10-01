@@ -17,6 +17,12 @@ import {
   challengeSideForRole,
   type ChallengeLobby,
 } from "@/lib/supabase/api";
+import {
+  PRIVACY_LAST_UPDATED,
+  PRIVACY_POLICY_URL,
+  PRIVACY_SECTIONS,
+  PRIVACY_SUMMARY,
+} from "@/lib/privacy-content";
 import { cn } from "@/lib/utils";
 import { WinCalendar } from "./WinCalendar";
 import { LeaderboardPanel } from "./LeaderboardPanel";
@@ -896,13 +902,21 @@ export function PrivacyModal({
   return (
     <Shell open={open} onClose={onClose} title="سياسة الخصوصية">
       <div className="space-y-4 text-[15px] leading-7 text-fg">
-        <p className="text-sm text-muted">آخر تحديث: ٢٩ أغسطس ٢٠٢٦</p>
-        <p>
-          خمن الكلمة تُلعب على جهازك. لا نطلب حساباً، ولا نجمع بريداً، ولا نستخدم
-          تتبعاً أو إعلانات.
-        </p>
-        <p>الإحصائيات والسلسلة والإعدادات تُحفظ محلياً على الجهاز.</p>
-        <p>زر المشاركة يفتح ورقة النظام لنسخ النتيجة. لا نرسلها نيابة عنك.</p>
+        <p className="text-sm text-muted">آخر تحديث: {PRIVACY_LAST_UPDATED}</p>
+        <p>{PRIVACY_SUMMARY}</p>
+        {PRIVACY_SECTIONS.slice(0, 4).map((section) => (
+          <div key={section.title}>
+            <p className="font-semibold">{section.title}</p>
+            <p className="mt-1">{section.body}</p>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="text-accent underline-offset-2 hover:underline"
+          onClick={() => window.open(PRIVACY_POLICY_URL, "_blank", "noopener")}
+        >
+          اقرأ السياسة كاملة
+        </button>
       </div>
     </Shell>
   );
