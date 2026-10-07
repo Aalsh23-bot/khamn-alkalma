@@ -22,6 +22,15 @@ export function isIosApp(): boolean {
 }
 
 export async function bootstrapNative(): Promise<void> {
+  // Restore durable game progress before React hydrates (iOS WKWebView localStorage
+  // alone is unreliable across kills / TestFlight updates).
+  try {
+    const { hydrateDurableStorage } = await import("@/lib/game/durable-storage");
+    await hydrateDurableStorage();
+  } catch {
+    /* web / plugin unavailable */
+  }
+
   if (!Capacitor.isNativePlatform()) return;
 
   try {

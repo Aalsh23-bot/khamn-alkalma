@@ -1,10 +1,7 @@
 import { Component, StrictMode, type ErrorInfo, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
-import { Game } from "@/components/game/Game";
 import { bootstrapNative } from "@/lib/native";
-
-void bootstrapNative();
 
 const root = document.getElementById("root");
 if (!root) throw new Error("root element missing");
@@ -45,12 +42,19 @@ class BootErrorBoundary extends Component<
   }
 }
 
-createRoot(root).render(
-  <StrictMode>
-    <BootErrorBoundary>
-      <main className="min-h-dvh bg-bg">
-        <Game />
-      </main>
-    </BootErrorBoundary>
-  </StrictMode>,
-);
+async function boot() {
+  // Must finish before the game store module reads localStorage.
+  await bootstrapNative();
+  const { Game } = await import("@/components/game/Game");
+  createRoot(root!).render(
+    <StrictMode>
+      <BootErrorBoundary>
+        <main className="min-h-dvh bg-bg">
+          <Game />
+        </main>
+      </BootErrorBoundary>
+    </StrictMode>,
+  );
+}
+
+void boot();
