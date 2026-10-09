@@ -87,6 +87,22 @@ export function Game() {
   const auth = useSupabaseAuth();
   const authLabel = auth.user?.displayName || auth.user?.email || null;
   const [isAdmin, setIsAdmin] = useState(false);
+  const authOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Defer so the opening tap does not dismiss the newly opened auth dialog. */
+  function openAuthModal() {
+    if (authOpenTimer.current) clearTimeout(authOpenTimer.current);
+    authOpenTimer.current = setTimeout(() => {
+      setModal("auth");
+      authOpenTimer.current = null;
+    }, 80);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (authOpenTimer.current) clearTimeout(authOpenTimer.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!auth.user) {
@@ -173,7 +189,7 @@ export function Game() {
         stats={stats}
         achievements={achievements}
         currentUserId={auth.user?.id}
-        onAuth={() => setModal("auth")}
+        onAuth={openAuthModal}
       />
       <SettingsModal
         open={modal === "settings"}
@@ -183,7 +199,7 @@ export function Game() {
         onSound={setSound}
         onInstall={() => setModal("install")}
         onPrivacy={() => setModal("privacy")}
-        onAuth={() => setModal("auth")}
+        onAuth={openAuthModal}
         onWordsAdmin={() => setModal("wordsAdmin")}
         showWordsAdmin={isAdmin}
         authLabel={authLabel}
@@ -317,7 +333,7 @@ export function Game() {
           onHelp={() => setModal("help")}
           onStats={() => setModal("stats")}
           onSettings={() => setModal("settings")}
-          onAuth={() => setModal("auth")}
+          onAuth={openAuthModal}
           authLabel={authLabel}
         />
         {modals}

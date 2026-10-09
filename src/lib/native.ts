@@ -48,17 +48,33 @@ export async function bootstrapNative(): Promise<void> {
     /* ios may ignore */
   }
 
+  // Hide splash before ATT — requesting while splash covers the window often
+  // swallows the system dialog on a fresh install.
+  try {
+    await SplashScreen.hide({ fadeOutDuration: 180 });
+  } catch {
+    /* already hidden */
+  }
+
   // Warm AdMob after ATT prompt on iOS (required when declaring tracking).
   try {
     const { AdMob } = await import("@capacitor-community/admob");
     if (Capacitor.getPlatform() === "ios") {
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 450);
+      });
       try {
         const { status } = await AdMob.trackingAuthorizationStatus();
         if (status === "notDetermined") {
           await AdMob.requestTrackingAuthorization();
         }
       } catch {
-        /* ATT optional on older iOS */
+        // Status probe failed — still attempt the system prompt once.
+        try {
+          await AdMob.requestTrackingAuthorization();
+        } catch {
+          /* ATT unavailable on older iOS */
+        }
       }
     }
     await AdMob.initialize({
@@ -66,12 +82,6 @@ export async function bootstrapNative(): Promise<void> {
     });
   } catch {
     /* AdMob optional until store IDs are ready */
-  }
-
-  try {
-    await SplashScreen.hide({ fadeOutDuration: 280 });
-  } catch {
-    /* already hidden */
   }
 
   void App.addListener("backButton", ({ canGoBack }) => {

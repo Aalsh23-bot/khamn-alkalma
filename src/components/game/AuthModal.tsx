@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import type { AuthUser } from "@/lib/supabase/auth";
@@ -6,6 +6,7 @@ import { isIosApp } from "@/lib/native";
 import { cn } from "@/lib/utils";
 
 type SignUpResult = { user: AuthUser | null; needsEmailConfirm: boolean } | null;
+type DeleteStep = "idle" | "confirm" | "working" | "done";
 
 export function AuthModal({
   open,
@@ -45,8 +46,22 @@ export function AuthModal({
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [info, setInfo] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<DeleteStep>("idle");
+  /** Keep profile visible through delete even after session clears. */
+  const [profileSnapshot, setProfileSnapshot] = useState<AuthUser | null>(null);
   const showApple = Boolean(signInWithApple) && isIosApp();
+  const locked = busy || deleteStep === "working" || deleteStep === "done";
+  const shownUser = user ?? (deleteStep !== "idle" ? profileSnapshot : null);
+
+  useEffect(() => {
+    if (!open) {
+      setDeleteStep("idle");
+      setInfo(null);
+      setProfileSnapshot(null);
+      return;
+    }
+    if (user) setProfileSnapshot(user);
+  }, [open, user]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -74,21 +89,43 @@ export function AuthModal({
     if (next) onClose();
   }
 
+  function preventDismiss(e: Event) {
+    // Close only via X / explicit buttons — avoids ghost-taps when opening
+    // from settings and layout shifts during the delete steps.
+    e.preventDefault();
+  }
+
   return (
-    <Dialog.Root open={open} onOpenChange={(v) => !v && onClose()}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(v) => {
+        if (!v && !locked) onClose();
+      }}
+    >
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-fg/35" />
         <Dialog.Content
           className="dialog-panel fixed top-1/2 left-1/2 z-50 max-h-[min(88dvh,720px)] w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-bg-elevated p-5 shadow-[var(--shadow-border)]"
           aria-describedby={undefined}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onPointerDownOutside={preventDismiss}
+          onInteractOutside={preventDismiss}
+          onEscapeKeyDown={(e) => {
+            if (locked) e.preventDefault();
+          }}
         >
           <div className="mb-4 flex items-start justify-between gap-3">
             <Dialog.Title className="font-display text-xl font-semibold text-balance">
-              {user ? "الحساب" : mode === "signin" ? "تسجيل الدخول" : "إنشاء حساب"}
+              {shownUser
+                ? "الحساب"
+                : mode === "signin"
+                  ? "تسجيل الدخول"
+                  : "إنشاء حساب"}
             </Dialog.Title>
             <Dialog.Close
-              className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-fg/6 hover:text-fg"
+              className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-fg/6 hover:text-fg disabled:opacity-40"
               aria-label="إغلاق"
+              disabled={locked}
             >
               <X className="size-5" />
             </Dialog.Close>
@@ -98,44 +135,36 @@ export function AuthModal({
             <p className="text-sm leading-7 text-muted">
               الحسابات غير مفعّلة بعد. أضف مفاتيح Supabase في ملف البيئة.
             </p>
-          ) : user ? (
+          ) : shownUser ? (
             <div className="space-y-4">
               <div className="rounded-xl bg-bg px-4 py-3">
                 <p className="text-sm text-muted">مسجّل الدخول كـ</p>
                 <p className="mt-1 font-medium text-fg">
-                  {user.displayName || user.email || user.id.slice(0, 8)}
+                  {shownUser.displayName ||
+                    shownUser.email ||
+                    shownUser.id.slice(0, 8)}
                 </p>
-                {user.email && (
+                {shownUser.email && (
                   <p className="mt-0.5 text-sm text-muted" dir="ltr">
-                    {user.email}
+                    {shownUser.email}
                   </p>
                 )}
               </div>
               {error && <p className="text-sm text-absent">{error}</p>}
               {info && <p className="text-sm text-muted">{info}</p>}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void signOut()}
-                className="flex h-12 w-full items-center justify-center rounded-xl bg-key text-sm font-semibold text-fg transition-transform duration-150 active:scale-[0.98] disabled:opacity-50"
-              >
-                تسجيل الخروج
-              </button>
 
-              {!confirmDelete ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    clearError();
-                    setInfo(null);
-                    setConfirmDelete(true);
-                  }}
-                  className="flex h-12 w-full items-center justify-center rounded-xl border border-absent/40 text-sm font-semibold text-absent transition-transform duration-150 active:scale-[0.98] disabled:opacity-50"
-                >
-                  حذف الحساب
-                </button>
-              ) : (
+              {deleteStep === "done" ? (
+                <div className="space-y-3 rounded-xl border border-line bg-bg px-4 py-3">
+                  <p className="text-sm leading-7 text-fg">تم حذف الحساب.</p>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg"
+                  >
+                    حسناً
+                  </button>
+                </div>
+              ) : deleteStep === "confirm" || deleteStep === "working" ? (
                 <div className="space-y-3 rounded-xl border border-absent/30 bg-bg px-4 py-3">
                   <p className="text-sm leading-7 text-fg">
                     سيتم حذف حسابك وبيانات لوحة الصدارة المرتبطة به نهائياً. لا
@@ -144,10 +173,11 @@ export function AuthModal({
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={locked}
                       onClick={() => {
-                        setConfirmDelete(false);
+                        setDeleteStep("idle");
                         setInfo(null);
+                        clearError();
                       }}
                       className="flex h-11 flex-1 items-center justify-center rounded-xl bg-key text-sm font-semibold text-fg disabled:opacity-50"
                     >
@@ -155,24 +185,50 @@ export function AuthModal({
                     </button>
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={locked}
                       onClick={() => {
                         void (async () => {
                           clearError();
                           setInfo(null);
+                          setDeleteStep("working");
                           const ok = await deleteAccount();
-                          if (!ok) return;
-                          setConfirmDelete(false);
-                          setInfo("تم حذف الحساب");
-                          onClose();
+                          if (!ok) {
+                            setDeleteStep("confirm");
+                            return;
+                          }
+                          setDeleteStep("done");
+                          setInfo(null);
                         })();
                       }}
                       className="flex h-11 flex-1 items-center justify-center rounded-xl bg-absent text-sm font-semibold text-white disabled:opacity-50"
                     >
-                      تأكيد الحذف
+                      {deleteStep === "working" ? "جاري الحذف..." : "تأكيد الحذف"}
                     </button>
                   </div>
                 </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={locked}
+                    onClick={() => void signOut()}
+                    className="flex h-12 w-full items-center justify-center rounded-xl bg-key text-sm font-semibold text-fg transition-transform duration-150 active:scale-[0.98] disabled:opacity-50"
+                  >
+                    تسجيل الخروج
+                  </button>
+                  <button
+                    type="button"
+                    disabled={locked}
+                    onClick={() => {
+                      clearError();
+                      setInfo(null);
+                      setDeleteStep("confirm");
+                    }}
+                    className="flex h-12 w-full items-center justify-center rounded-xl border border-absent/40 text-sm font-semibold text-absent transition-transform duration-150 active:scale-[0.98] disabled:opacity-50"
+                  >
+                    حذف الحساب
+                  </button>
+                </>
               )}
             </div>
           ) : (
