@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
+  deleteOwnAccount,
   getSession,
   signInWithAppleNative,
   signInWithEmail,
@@ -85,6 +86,13 @@ export function useSupabaseAuth() {
       run(() => signUpWithEmail(email, password, displayName)),
     signInWithApple: () => run(() => signInWithAppleNative()),
     signOut: () => run(() => signOut()),
+    deleteAccount: async () => {
+      const result = await run(async () => {
+        await deleteOwnAccount();
+        return true as const;
+      });
+      return result === true;
+    },
   };
 }
 
@@ -97,5 +105,8 @@ function mapAuthError(message: string): string {
   if (m.includes("network") || m.includes("fetch")) return "تحقق من الاتصال بالإنترنت";
   if (m.includes("cancel") || m.includes("1001")) return "تم إلغاء تسجيل الدخول";
   if (m.includes("apple")) return message;
+  if (m.includes("delete_own_account") || m.includes("not authenticated")) {
+    return "تعذّر حذف الحساب. تأكد من تسجيل الدخول وحاول مرة أخرى.";
+  }
   return message;
 }

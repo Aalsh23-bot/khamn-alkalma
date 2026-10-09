@@ -206,6 +206,7 @@ export function Game() {
         signUp={auth.signUp}
         signInWithApple={auth.signInWithApple}
         signOut={auth.signOut}
+        deleteAccount={auth.deleteAccount}
       />
       <ResultModal
         open={modal === "result"}

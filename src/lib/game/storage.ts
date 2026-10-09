@@ -4,6 +4,7 @@ import {
   type AchievementsSave,
   type AchievementId,
 } from "./achievements";
+import { durableSetItem } from "./durable-storage";
 import {
   buildStageOrder,
   isValidStageOrder,
@@ -127,20 +128,53 @@ function read<T>(key: string, fallback: T): T {
 function write(key: string, value: unknown) {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    durableSetItem(key, JSON.stringify(value));
   } catch {
     /* private mode / quota */
   }
 }
 
+/** Round snapshots — must NOT share keys with stages progress (`khamsa:stages`). */
+function roundKey(mode: Mode): string {
+  return `khamsa:round:${mode}`;
+}
+
+function isRoundSave(value: unknown): value is RoundSave {
+  if (!value || typeof value !== "object") return false;
+  const v = value as RoundSave;
+  return Array.isArray(v.guesses) && typeof v.answer === "string";
+}
+
+function isStagesProgress(value: unknown): value is StagesSave {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Partial<StagesSave>;
+  return typeof v.unlocked === "number" || Array.isArray(v.order);
+}
+
 export function loadRound(mode: Mode): RoundSave | null {
-  const data = read<RoundSave | null>(`khamsa:${mode}`, null);
-  if (!data || data.version !== VERSION) return null;
-  return data;
+  const data = read<RoundSave | null>(roundKey(mode), null);
+  if (data && isRoundSave(data) && data.version === VERSION) return data;
+
+  // Migrate legacy key `khamsa:${mode}` (collided with stages progress for mode=stages).
+  if (typeof window !== "undefined") {
+    try {
+      const legacy = localStorage.getItem(`khamsa:${mode}`);
+      if (legacy) {
+        const parsed = JSON.parse(legacy) as unknown;
+        if (isRoundSave(parsed) && (parsed as RoundSave).version === VERSION) {
+          write(roundKey(mode), parsed);
+          return parsed as RoundSave;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
 }
 
 export function saveRound(mode: Mode, round: RoundSave) {
-  write(`khamsa:${mode}`, { ...round, version: VERSION });
+  write(roundKey(mode), { ...round, version: VERSION });
 }
 
 export function loadStats(): StatsSave {
@@ -219,26 +253,40 @@ export function loadStages(): StagesSave {
       return fresh;
     }
 
-    const parsed = JSON.parse(raw) as Partial<StagesSave>;
-    if (parsed.version !== VERSION) {
+    const parsedUnknown = JSON.parse(raw) as unknown;
+    // Legacy bug: in-progress stage rounds were saved under the same key and
+    // wiped unlocked/completed on the next launch. Ignore round-shaped payloads.
+    if (isRoundSave(parsedUnknown) && !isStagesProgress(parsedUnknown)) {
       const fresh = make();
       saveStages(fresh);
       return fresh;
     }
 
+    const parsed = parsedUnknown as Partial<StagesSave>;
+    // Never wipe unlocked/completed on version bumps — only rebuild word order if needed.
     const needsOrder =
       !isValidStageOrder(parsed.order, STAGE_COUNT) ||
       parsed.orderScheme !== STAGE_ORDER_SCHEME;
-    const order = needsOrder ? buildStageOrder(STAGE_COUNT) : (parsed.order as number[]);
+    const order = needsOrder
+      ? buildStageOrder(STAGE_COUNT)
+      : (parsed.order as number[]);
+    const unlocked = Math.min(
+      STAGE_COUNT,
+      Math.max(1, Number(parsed.unlocked) || 1),
+    );
+    const completed =
+      parsed.completed && typeof parsed.completed === "object"
+        ? parsed.completed
+        : {};
     const stages: StagesSave = {
       version: VERSION,
-      unlocked: Math.min(STAGE_COUNT, Math.max(1, parsed.unlocked || 1)),
-      completed: parsed.completed ?? {},
+      unlocked,
+      completed,
       order,
       orderScheme: STAGE_ORDER_SCHEME,
     };
 
-    if (needsOrder) saveStages(stages);
+    if (needsOrder || parsed.version !== VERSION) saveStages(stages);
     return stages;
   } catch {
     const fresh = make();

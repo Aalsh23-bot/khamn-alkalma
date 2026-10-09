@@ -22,6 +22,15 @@ export function isIosApp(): boolean {
 }
 
 export async function bootstrapNative(): Promise<void> {
+  // Restore durable game progress before React hydrates (iOS WKWebView localStorage
+  // alone is unreliable across kills / TestFlight updates).
+  try {
+    const { hydrateDurableStorage } = await import("@/lib/game/durable-storage");
+    await hydrateDurableStorage();
+  } catch {
+    /* web / plugin unavailable */
+  }
+
   if (!Capacitor.isNativePlatform()) return;
 
   try {
@@ -39,9 +48,19 @@ export async function bootstrapNative(): Promise<void> {
     /* ios may ignore */
   }
 
-  // Warm AdMob with Google test IDs (production flag lives in ads/config.ts).
+  // Warm AdMob after ATT prompt on iOS (required when declaring tracking).
   try {
     const { AdMob } = await import("@capacitor-community/admob");
+    if (Capacitor.getPlatform() === "ios") {
+      try {
+        const { status } = await AdMob.trackingAuthorizationStatus();
+        if (status === "notDetermined") {
+          await AdMob.requestTrackingAuthorization();
+        }
+      } catch {
+        /* ATT optional on older iOS */
+      }
+    }
     await AdMob.initialize({
       initializeForTesting: !ADMOB.useProductionIds,
     });

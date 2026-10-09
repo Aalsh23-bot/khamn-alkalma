@@ -83,6 +83,60 @@ export async function signOut(): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Permanently delete the signed-in account.
+ * Prefers Edge Function `account-lifecycle` (revokes Sign in with Apple tokens
+ * via Apple REST API, then deletes the user). Falls back to RPC delete.
+ */
+export async function deleteOwnAccount(): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase غير مضبوط");
+
+  const { data: sessionData } = await sb.auth.getSession();
+  if (!sessionData.session) throw new Error("يجب تسجيل الدخول أولاً");
+
+  const { data, error: fnError } = await sb.functions.invoke("account-lifecycle", {
+    body: { action: "delete_account" },
+  });
+
+  if (!fnError) {
+    const payload = data as { ok?: boolean; error?: string } | null;
+    if (payload?.error) throw new Error(payload.error);
+  } else {
+    // Function not deployed / misconfigured — still delete via RPC.
+    const { error } = await sb.rpc("delete_own_account");
+    if (error) {
+      throw new Error(
+        fnError.message || error.message || "تعذّر حذف الحساب",
+      );
+    }
+  }
+
+  try {
+    await sb.auth.signOut();
+  } catch {
+    /* session already invalidated after delete */
+  }
+}
+
+/** Exchange + store Apple refresh token right after native Sign in with Apple. */
+async function storeAppleAuthorizationCode(
+  authorizationCode: string,
+): Promise<void> {
+  const sb = getSupabase();
+  if (!sb || !authorizationCode.trim()) return;
+  try {
+    await sb.functions.invoke("account-lifecycle", {
+      body: {
+        action: "store_apple_code",
+        authorizationCode: authorizationCode.trim(),
+      },
+    });
+  } catch {
+    /* revoke will be skipped later if token was not stored */
+  }
+}
+
 function randomNonce(length = 32): string {
   const chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -127,6 +181,8 @@ export async function signInWithAppleNative(): Promise<AuthUser> {
   if (!identityToken) {
     throw new Error("لم يُرجع Apple رمز الدخول");
   }
+  const authorizationCode =
+    (result.response as { authorizationCode?: string }).authorizationCode ?? "";
 
   const given = result.response.givenName?.trim();
   const family = result.response.familyName?.trim();
@@ -138,6 +194,11 @@ export async function signInWithAppleNative(): Promise<AuthUser> {
     nonce: rawNonce,
   });
   if (error) throw error;
+
+  // Store refresh token for later Apple /auth/revoke on account deletion (TN3194).
+  if (authorizationCode) {
+    await storeAppleAuthorizationCode(authorizationCode);
+  }
 
   if (fullName && data.user) {
     await sb.auth.updateUser({

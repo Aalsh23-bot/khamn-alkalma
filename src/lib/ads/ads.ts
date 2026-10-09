@@ -28,11 +28,28 @@ export function registerSimulatedAdHandler(handler: SimulatedHandler | null) {
   simulatedHandler = handler;
 }
 
+/** iOS 14+: ask ATT before AdMob uses the advertising identifier for tracking. */
+async function requestTrackingIfNeeded(AdMob: {
+  trackingAuthorizationStatus: () => Promise<{ status: string }>;
+  requestTrackingAuthorization: () => Promise<void>;
+}): Promise<void> {
+  if (Capacitor.getPlatform() !== "ios") return;
+  try {
+    const { status } = await AdMob.trackingAuthorizationStatus();
+    if (status === "notDetermined") {
+      await AdMob.requestTrackingAuthorization();
+    }
+  } catch {
+    /* ATT unavailable — continue without personalized ads */
+  }
+}
+
 async function ensureAdMob(): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) return false;
   if (admobReady) return true;
   try {
     const { AdMob } = await import("@capacitor-community/admob");
+    await requestTrackingIfNeeded(AdMob);
     await AdMob.initialize({
       initializeForTesting: !ADMOB.useProductionIds,
     });
