@@ -48,9 +48,19 @@ export async function bootstrapNative(): Promise<void> {
     /* ios may ignore */
   }
 
-  // Warm AdMob with Google test IDs (production flag lives in ads/config.ts).
+  // Warm AdMob after ATT prompt on iOS (required when declaring tracking).
   try {
     const { AdMob } = await import("@capacitor-community/admob");
+    if (Capacitor.getPlatform() === "ios") {
+      try {
+        const { status } = await AdMob.trackingAuthorizationStatus();
+        if (status === "notDetermined") {
+          await AdMob.requestTrackingAuthorization();
+        }
+      } catch {
+        /* ATT optional on older iOS */
+      }
+    }
     await AdMob.initialize({
       initializeForTesting: !ADMOB.useProductionIds,
     });

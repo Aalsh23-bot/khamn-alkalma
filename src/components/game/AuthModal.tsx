@@ -20,6 +20,7 @@ export function AuthModal({
   signUp,
   signInWithApple,
   signOut,
+  deleteAccount,
 }: {
   open: boolean;
   onClose: () => void;
@@ -37,12 +38,14 @@ export function AuthModal({
   ) => Promise<SignUpResult>;
   signInWithApple?: () => Promise<AuthUser | null>;
   signOut: () => Promise<unknown>;
+  deleteAccount: () => Promise<boolean>;
 }) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [info, setInfo] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const showApple = Boolean(signInWithApple) && isIosApp();
 
   async function onSubmit(e: FormEvent) {
@@ -109,6 +112,7 @@ export function AuthModal({
                 )}
               </div>
               {error && <p className="text-sm text-absent">{error}</p>}
+              {info && <p className="text-sm text-muted">{info}</p>}
               <button
                 type="button"
                 disabled={busy}
@@ -117,6 +121,59 @@ export function AuthModal({
               >
                 تسجيل الخروج
               </button>
+
+              {!confirmDelete ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    clearError();
+                    setInfo(null);
+                    setConfirmDelete(true);
+                  }}
+                  className="flex h-12 w-full items-center justify-center rounded-xl border border-absent/40 text-sm font-semibold text-absent transition-transform duration-150 active:scale-[0.98] disabled:opacity-50"
+                >
+                  حذف الحساب
+                </button>
+              ) : (
+                <div className="space-y-3 rounded-xl border border-absent/30 bg-bg px-4 py-3">
+                  <p className="text-sm leading-7 text-fg">
+                    سيتم حذف حسابك وبيانات لوحة الصدارة المرتبطة به نهائياً. لا
+                    يمكن التراجع.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setConfirmDelete(false);
+                        setInfo(null);
+                      }}
+                      className="flex h-11 flex-1 items-center justify-center rounded-xl bg-key text-sm font-semibold text-fg disabled:opacity-50"
+                    >
+                      إلغاء
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        void (async () => {
+                          clearError();
+                          setInfo(null);
+                          const ok = await deleteAccount();
+                          if (!ok) return;
+                          setConfirmDelete(false);
+                          setInfo("تم حذف الحساب");
+                          onClose();
+                        })();
+                      }}
+                      className="flex h-11 flex-1 items-center justify-center rounded-xl bg-absent text-sm font-semibold text-white disabled:opacity-50"
+                    >
+                      تأكيد الحذف
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-3">

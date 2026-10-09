@@ -83,6 +83,27 @@ export async function signOut(): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Permanently delete the signed-in user's auth account + cascaded profile data.
+ * Requires migration `delete_own_account` on Supabase.
+ */
+export async function deleteOwnAccount(): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase غير مضبوط");
+
+  const { data: sessionData } = await sb.auth.getSession();
+  if (!sessionData.session) throw new Error("يجب تسجيل الدخول أولاً");
+
+  const { error } = await sb.rpc("delete_own_account");
+  if (error) throw error;
+
+  try {
+    await sb.auth.signOut();
+  } catch {
+    /* session already invalidated after delete */
+  }
+}
+
 function randomNonce(length = 32): string {
   const chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
