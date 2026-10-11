@@ -67,7 +67,8 @@ export async function shareOrCopy(
 }
 
 export async function shareChallengeInvite(code: string): Promise<"shared" | "copied"> {
-  const url = challengeAbsoluteUrl(code);
+  // Invite text already includes the absolute URL — do not pass `url` again or
+  // iOS Share appends a second copy (and used to show capacitor://localhost).
   const text = challengeInviteText(code);
-  return shareOrCopy(text, { url, dialogTitle: "شارك التحدّي" });
+  return shareOrCopy(text, { dialogTitle: "شارك التحدّي" });
 }

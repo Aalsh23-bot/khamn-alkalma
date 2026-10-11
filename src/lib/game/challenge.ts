@@ -1,6 +1,6 @@
 import { ANSWERS } from "./words";
 import { dailyPool } from "./daily";
-import { APP_NAME } from "./brand";
+import { APP_NAME, WEB_APP_URL } from "./brand";
 
 const SALT = 0x5a3c;
 
@@ -36,9 +36,23 @@ export function challengePath(code: string): string {
   return `?c=${encodeURIComponent(code)}`;
 }
 
+function shareBaseUrl(): string {
+  if (typeof window === "undefined") return WEB_APP_URL;
+  const { protocol, origin, pathname } = window.location;
+  // Capacitor / Ionic origins are not openable by friends — share the public site.
+  if (
+    protocol === "capacitor:" ||
+    protocol === "ionic:" ||
+    origin.startsWith("capacitor://") ||
+    origin.startsWith("ionic://")
+  ) {
+    return WEB_APP_URL;
+  }
+  return `${origin}${pathname || "/"}`;
+}
+
 export function challengeAbsoluteUrl(code: string): string {
-  if (typeof window === "undefined") return challengePath(code);
-  const base = `${window.location.origin}${window.location.pathname}`;
+  const base = shareBaseUrl().replace(/\/+$/, "");
   return `${base}${challengePath(code)}`;
 }
 
