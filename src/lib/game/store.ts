@@ -45,6 +45,7 @@ import {
   fetchChallengeLobby,
   fetchLexiconSnapshot,
   joinFriendChallenge,
+  rematchFriendChallenge,
   submitChallengeResult,
   submitDailyResult,
   type ChallengeLobby,
@@ -84,6 +85,8 @@ function mapChallengeError(message: string): string {
   if (m.includes("full")) return "هذا التحدّي ممتلئ";
   if (m.includes("not joinable")) return "لا يمكن الانضمام لهذا التحدّي";
   if (m.includes("waiting for opponent")) return "بانتظار صديقك…";
+  if (m.includes("series still in progress")) return "السلسلة لسا ما خلصت";
+  if (m.includes("series already complete")) return "انتهت السلسلة — ابدأ إعادة أو تحدّياً جديداً";
   return message || "تعذّر إكمال التحدّي";
 }
 
@@ -150,6 +153,8 @@ export interface GameStore {
   retryStageNewWord: () => void;
   /** Start a brand-new friend challenge (new random word). */
   newChallenge: () => void;
+  /** Same code/room: start a fresh best-of-5 series after the previous ends. */
+  rematchChallenge: () => void;
   typeLetter: (ch: string) => void;
   backspace: () => void;
   submit: () => void;
@@ -308,17 +313,34 @@ function beginOnlineMatch(
   role: "host" | "guest",
   lobby?: ChallengeLobby | null,
 ) {
+  const round = lobby?.round_number ?? 1;
+  const maxRounds = lobby?.max_rounds ?? 5;
+  const toast =
+    round > 1
+      ? `الجولة ${round} من ${maxRounds} — أول واحد يوصل ٣ يفوز`
+      : "التحدّي بدأ — أفضل من ٥ · أول واحد يوصل ٣ يفوز";
   set({
     screen: "play",
     ...freshChallenge(word, code),
     challengeRole: role,
     challengeLobby: lobby ?? null,
     modal: null,
-    toast: "التحدّي بدأ — نفس الكلمة ونفس الوقت",
+    toast,
     revealing: false,
     shake: false,
   });
   persist(get);
+}
+
+function seriesOutcomeForRole(
+  lobby: ChallengeLobby,
+): "win" | "loss" | "draw" | "pending" {
+  if (!lobby.series_complete) return "pending";
+  const mine = lobby.role === "host" ? lobby.host_score : lobby.guest_score;
+  const theirs = lobby.role === "host" ? lobby.guest_score : lobby.host_score;
+  if (mine > theirs) return "win";
+  if (mine < theirs) return "loss";
+  return "draw";
 }
 
 function applyLobbyToStore(
@@ -334,13 +356,27 @@ function applyLobbyToStore(
     challengeCode: lobby.code,
   };
 
-  if (
-    lobby.status === "active" &&
-    lobby.word &&
-    (s.screen !== "play" || s.mode !== "challenge" || !s.answer)
-  ) {
-    beginOnlineMatch(set, get, lobby.word, lobby.code, lobby.role, lobby);
-    return;
+  const wordChanged =
+    Boolean(lobby.word) &&
+    s.mode === "challenge" &&
+    Boolean(s.answer) &&
+    lobby.word !== s.answer;
+
+  const roundAdvanced =
+    lobby.round_number > (s.challengeLobby?.round_number ?? 0);
+
+  // Start / resume an active round (first join, next word, or rematch).
+  if (lobby.status === "active" && lobby.word) {
+    const shouldStart =
+      s.screen !== "play" ||
+      s.mode !== "challenge" ||
+      !s.answer ||
+      wordChanged ||
+      (roundAdvanced && (s.status === "won" || s.status === "lost" || s.modal === "result"));
+    if (shouldStart) {
+      beginOnlineMatch(set, get, lobby.word, lobby.code, lobby.role, lobby);
+      return;
+    }
   }
 
   if (lobby.status === "expired" && s.modal === "challengeInvite") {
@@ -360,15 +396,25 @@ function applyLobbyToStore(
     const me = challengeSideForRole(lobby, lobby.role);
     const oppRole = lobby.role === "host" ? "guest" : "host";
     const opp = challengeSideForRole(lobby, oppRole);
-    const outcome = challengeOutcome(me, opp);
+    const roundOutcome = challengeOutcome(me, opp);
+    if (roundOutcome === "pending") return;
+
+    // Between rounds: keep result UI; lifetime stats wait for series end.
+    if (!lobby.series_complete) {
+      set({ challengeLobby: lobby, modal: "result" });
+      return;
+    }
+
+    const outcome = seriesOutcomeForRole(lobby);
     if (outcome === "pending") return;
 
     let challengeStats = get().challengeStats;
+    const seriesKey = `khamsa:ch-series:${lobby.code}:${lobby.host_score}-${lobby.guest_score}:r${lobby.round_number}`;
     let counted = false;
     try {
       counted =
         typeof sessionStorage !== "undefined" &&
-        sessionStorage.getItem(`khamsa:ch-counted:${lobby.code}`) === "1";
+        sessionStorage.getItem(seriesKey) === "1";
     } catch {
       counted = false;
     }
@@ -376,7 +422,7 @@ function applyLobbyToStore(
       challengeStats = applyChallengeMatchResult(challengeStats, outcome);
       saveChallengeStats(challengeStats);
       try {
-        sessionStorage.setItem(`khamsa:ch-counted:${lobby.code}`, "1");
+        sessionStorage.setItem(seriesKey, "1");
       } catch {
         /* ignore */
       }
@@ -386,13 +432,18 @@ function applyLobbyToStore(
       stats: get().stats,
       stages: get().stages,
       challengeStats,
-      won: !!me.won,
+      won: outcome === "win",
       guessCount: me.guesses ?? get().guesses.length,
       stageLevel: 0,
       mode: "challenge",
       challengeOutcome: outcome,
     });
-    set({ challengeStats, achievements, challengeLobby: lobby });
+    set({
+      challengeStats,
+      achievements,
+      challengeLobby: lobby,
+      modal: "result",
+    });
   }
 }
 
@@ -614,6 +665,30 @@ export const useGame = create<GameStore>((set, get) => ({
         set({
           toast: mapChallengeError(e instanceof Error ? e.message : ""),
           modal: "auth",
+        });
+      }
+    })();
+  },
+
+  rematchChallenge: () => {
+    const code = get().challengeCode;
+    if (!code) {
+      get().newChallenge();
+      return;
+    }
+    void (async () => {
+      try {
+        const lobby = await rematchFriendChallenge(code);
+        if (!lobby?.word) {
+          set({ toast: "تعذّرت إعادة التحدّي", modal: "result" });
+          return;
+        }
+        beginOnlineMatch(set, get, lobby.word, lobby.code, lobby.role, lobby);
+        set({ toast: "سلسلة جديدة — أول واحد يوصل ٣ يفوز" });
+      } catch (e) {
+        set({
+          toast: mapChallengeError(e instanceof Error ? e.message : ""),
+          modal: "result",
         });
       }
     })();

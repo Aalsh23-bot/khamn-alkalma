@@ -35,11 +35,29 @@ export type ChallengeLobby = {
   host_won: boolean | null;
   guest_guesses: number | null;
   guest_won: boolean | null;
+  /** Best-of-5 series (first to 3). */
+  host_score: number;
+  guest_score: number;
+  round_number: number;
+  series_complete: boolean;
+  next_round_at: string | null;
+  wins_needed: number;
+  max_rounds: number;
 };
 
 function asLobby(data: unknown): ChallengeLobby {
-  const row = (Array.isArray(data) ? data[0] : data) as ChallengeLobby;
-  return row;
+  const row = (Array.isArray(data) ? data[0] : data) as Partial<ChallengeLobby> &
+    ChallengeLobby;
+  return {
+    ...row,
+    host_score: row.host_score ?? 0,
+    guest_score: row.guest_score ?? 0,
+    round_number: row.round_number ?? 1,
+    series_complete: row.series_complete ?? row.status === "done",
+    next_round_at: row.next_round_at ?? null,
+    wins_needed: row.wins_needed ?? 3,
+    max_rounds: row.max_rounds ?? 5,
+  };
 }
 
 /** Fetch today's puzzle number (no answer leaked). */
@@ -152,6 +170,22 @@ export async function submitChallengeResult(input: {
     p_code: input.code.trim(),
     p_guesses: input.guesses,
     p_won: input.won,
+  });
+  if (error) throw error;
+  return asLobby(data);
+}
+
+/** Same room/code, new best-of-5 series after the previous one ends. */
+export async function rematchFriendChallenge(
+  code: string,
+): Promise<ChallengeLobby | null> {
+  if (!isSupabaseConfigured()) return null;
+  const sb = requireSupabase();
+  const { data: sessionData } = await sb.auth.getSession();
+  if (!sessionData.session) return null;
+
+  const { data, error } = await sb.rpc("rematch_friend_challenge", {
+    p_code: code.trim(),
   });
   if (error) throw error;
   return asLobby(data);

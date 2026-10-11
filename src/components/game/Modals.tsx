@@ -369,6 +369,7 @@ export function ResultModal({
   onWatchAdRevive,
   onRetryNewWord,
   onNewChallenge,
+  onRematchChallenge,
   onRefreshChallenge,
   adBusy,
 }: {
@@ -393,6 +394,7 @@ export function ResultModal({
   onWatchAdRevive?: () => void;
   onRetryNewWord?: () => void;
   onNewChallenge?: () => void;
+  onRematchChallenge?: () => void;
   onRefreshChallenge?: () => void;
   adBusy?: boolean;
 }) {
@@ -400,6 +402,7 @@ export function ResultModal({
   const lost = status === "lost";
   const [copied, setCopied] = useState(false);
   const [remain, setRemain] = useState(msUntilTomorrow());
+  const [nextRoundSec, setNextRoundSec] = useState<number | null>(null);
 
   useEffect(() => {
     if (!open || mode !== "daily") return;
@@ -410,9 +413,27 @@ export function ResultModal({
   useEffect(() => {
     if (!open || mode !== "challenge" || !onRefreshChallenge) return;
     onRefreshChallenge();
-    const id = window.setInterval(() => onRefreshChallenge(), 2500);
+    const id = window.setInterval(() => onRefreshChallenge(), 1000);
     return () => window.clearInterval(id);
   }, [open, mode, onRefreshChallenge]);
+
+  useEffect(() => {
+    if (!open || mode !== "challenge" || !challengeLobby?.next_round_at) {
+      setNextRoundSec(null);
+      return;
+    }
+    if (challengeLobby.series_complete) {
+      setNextRoundSec(null);
+      return;
+    }
+    const tick = () => {
+      const ms = new Date(challengeLobby.next_round_at!).getTime() - Date.now();
+      setNextRoundSec(Math.max(0, Math.ceil(ms / 1000)));
+    };
+    tick();
+    const id = window.setInterval(tick, 250);
+    return () => window.clearInterval(id);
+  }, [open, mode, challengeLobby?.next_round_at, challengeLobby?.series_complete]);
 
   const challengeCompare = (() => {
     if (mode !== "challenge" || !challengeLobby || !challengeRole) return null;
@@ -420,7 +441,26 @@ export function ResultModal({
     const oppRole = challengeRole === "host" ? "guest" : "host";
     const opp = challengeSideForRole(challengeLobby, oppRole);
     const outcome = challengeOutcome(me, opp);
-    return { me, opp, outcome, oppName: challengeLobby.opponent_name };
+    const myScore =
+      challengeRole === "host"
+        ? challengeLobby.host_score
+        : challengeLobby.guest_score;
+    const oppScore =
+      challengeRole === "host"
+        ? challengeLobby.guest_score
+        : challengeLobby.host_score;
+    return {
+      me,
+      opp,
+      outcome,
+      oppName: challengeLobby.opponent_name,
+      myScore,
+      oppScore,
+      roundNumber: challengeLobby.round_number,
+      maxRounds: challengeLobby.max_rounds,
+      winsNeeded: challengeLobby.wins_needed,
+      seriesComplete: challengeLobby.series_complete,
+    };
   })();
 
   async function onShare() {
@@ -505,13 +545,20 @@ export function ResultModal({
 
       {challengeCompare && (
         <div className="mt-5 rounded-xl bg-bg px-4 py-3 text-sm">
-          <p className="font-medium text-fg">نتيجة التحدّي</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-medium text-fg">نتيجة الكلمة</p>
+            <p className="text-xs text-muted">
+              الجولة {challengeCompare.roundNumber}/{challengeCompare.maxRounds}
+            </p>
+          </div>
           <div className="mt-2 flex justify-between gap-3 text-muted">
             <span>أنت</span>
             <span className="tabular-nums text-fg">
               {challengeCompare.me.won
                 ? `${challengeCompare.me.guesses}/6`
-                : "لم تُحل"}
+                : challengeCompare.me.finished
+                  ? "لم تُحل"
+                  : "…"}
             </span>
           </div>
           <div className="mt-1 flex justify-between gap-3 text-muted">
@@ -527,17 +574,41 @@ export function ResultModal({
           {challengeCompare.outcome !== "pending" && (
             <p className="mt-3 text-center font-semibold text-accent">
               {challengeCompare.outcome === "win"
-                ? "فزت بالتحدّي"
+                ? "فزت بالكلمة"
                 : challengeCompare.outcome === "loss"
-                  ? "صديقك فاز"
-                  : "تعادل"}
+                  ? "صديقك فاز بالكلمة"
+                  : "تعادل بالكلمة"}
             </p>
           )}
           {challengeCompare.outcome === "pending" && (
             <p className="mt-3 text-center text-xs text-muted">
-              النتيجة النهائية تظهر لما يخلّص صديقك
+              نتيجة الكلمة تظهر لما يخلّص صديقك
             </p>
           )}
+
+          <div className="mt-4 border-t border-line pt-3 text-center">
+            <p className="text-xs text-muted">
+              السلسلة · أول واحد يوصل {challengeCompare.winsNeeded}
+            </p>
+            <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-fg">
+              {challengeCompare.myScore} – {challengeCompare.oppScore}
+            </p>
+            {challengeCompare.seriesComplete ? (
+              <p className="mt-2 font-semibold text-accent">
+                {challengeCompare.myScore > challengeCompare.oppScore
+                  ? `فزت بالتحدّي ${challengeCompare.myScore}–${challengeCompare.oppScore}`
+                  : challengeCompare.myScore < challengeCompare.oppScore
+                    ? `صديقك فاز بالتحدّي ${challengeCompare.oppScore}–${challengeCompare.myScore}`
+                    : `انتهت السلسلة بالتعادل ${challengeCompare.myScore}–${challengeCompare.oppScore}`}
+              </p>
+            ) : nextRoundSec !== null && challengeCompare.outcome !== "pending" ? (
+              <p className="mt-2 text-xs text-muted">
+                {nextRoundSec > 0
+                  ? `الكلمة التالية خلال ${nextRoundSec}`
+                  : "تبدأ الكلمة التالية…"}
+              </p>
+            ) : null}
+          </div>
         </div>
       )}
 
@@ -573,7 +644,7 @@ export function ResultModal({
               أعد المرحلة بكلمة جديدة
             </button>
           )}
-          {mode === "challenge" && challengeCode && (
+          {mode === "challenge" && challengeCode && !challengeCompare?.seriesComplete && (
             <button
               type="button"
               disabled={adBusy}
@@ -584,6 +655,26 @@ export function ResultModal({
               شارك رابط التحدّي
             </button>
           )}
+          {mode === "challenge" && challengeCompare?.seriesComplete && (
+            <>
+              <button
+                type="button"
+                disabled={adBusy}
+                onClick={onRematchChallenge}
+                className="flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
+              >
+                مع نفس الصديق (نفس الكود)
+              </button>
+              <button
+                type="button"
+                disabled={adBusy}
+                onClick={onNewChallenge}
+                className="flex h-12 w-full items-center justify-center rounded-xl bg-fg text-sm font-semibold text-bg disabled:opacity-50"
+              >
+                تحدّي جديد
+              </button>
+            </>
+          )}
           <button
             type="button"
             disabled={adBusy}
@@ -593,63 +684,119 @@ export function ResultModal({
             <Share2 className="size-4" />
             {copied ? "تم النسخ" : "مشاركة النتيجة"}
           </button>
-          <button
-            type="button"
-            disabled={adBusy}
-            onClick={
-              mode === "stages" ? onMap : mode === "challenge" ? onNewChallenge : onHome
-            }
-            className="flex h-10 w-full items-center justify-center text-sm text-muted"
-          >
-            {mode === "stages" ? "الخريطة" : mode === "challenge" ? "تحدّي جديد" : "الرئيسية"}
-          </button>
+          {mode === "stages" ? (
+            <button
+              type="button"
+              disabled={adBusy}
+              onClick={onMap}
+              className="flex h-10 w-full items-center justify-center text-sm text-muted"
+            >
+              الخريطة
+            </button>
+          ) : mode === "challenge" ? (
+            !challengeCompare?.seriesComplete ? (
+              <button
+                type="button"
+                disabled={adBusy}
+                onClick={onHome}
+                className="flex h-10 w-full items-center justify-center text-sm text-muted"
+              >
+                الرئيسية
+              </button>
+            ) : null
+          ) : (
+            <button
+              type="button"
+              disabled={adBusy}
+              onClick={onHome}
+              className="flex h-10 w-full items-center justify-center text-sm text-muted"
+            >
+              الرئيسية
+            </button>
+          )}
         </div>
       ) : (
         <>
-          {mode === "challenge" && challengeCode && (
+          {mode === "challenge" && challengeCode && !challengeCompare?.seriesComplete && (
             <button
               type="button"
               onClick={() => void onShareChallengeLink()}
-              className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-accent-fg"
+              className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-key text-sm font-medium text-fg"
             >
               <Share2 className="size-4" />
               {copied ? "تم النسخ" : "شارك التحدّي مع صديق"}
             </button>
           )}
-          <div className={mode === "challenge" ? "mt-2 flex gap-2" : "mt-5 flex gap-2"}>
-            <button
-              type="button"
-              onClick={onShare}
-              className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-key text-sm font-medium text-fg"
-            >
-              <Share2 className="size-4" />
-              {copied ? "تم النسخ" : "مشاركة"}
-            </button>
-            <button
-              type="button"
-              onClick={
-                mode === "challenge" ? onNewChallenge : onAgain
-              }
-              className="flex h-12 flex-1 items-center justify-center rounded-xl bg-fg text-sm font-semibold text-bg"
-            >
-              {againLabel}
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={mode === "stages" ? onMap : onStats}
-            className="mt-2 flex h-11 w-full items-center justify-center text-sm text-muted"
-          >
-            {mode === "stages" ? "الخريطة" : "الإحصائيات"}
-          </button>
-          {(mode === "daily" || mode === "challenge") && (
-            <button
-              type="button"
-              onClick={onHome}
-              className="mt-1 flex h-10 w-full items-center justify-center text-sm text-muted"
-            >
-              الرئيسية
-            </button>
+          {mode === "challenge" && challengeCompare?.seriesComplete ? (
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={onRematchChallenge}
+                className="flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg"
+              >
+                مع نفس الصديق (نفس الكود)
+              </button>
+              <button
+                type="button"
+                onClick={onNewChallenge}
+                className="flex h-12 w-full items-center justify-center rounded-xl bg-fg text-sm font-semibold text-bg"
+              >
+                تحدّي جديد
+              </button>
+              <button
+                type="button"
+                onClick={onShare}
+                className="flex h-11 w-full items-center justify-center gap-2 text-sm text-muted"
+              >
+                <Share2 className="size-4" />
+                {copied ? "تم النسخ" : "مشاركة"}
+              </button>
+              <button
+                type="button"
+                onClick={onHome}
+                className="flex h-10 w-full items-center justify-center text-sm text-muted"
+              >
+                الرئيسية
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className={mode === "challenge" ? "mt-2 flex gap-2" : "mt-5 flex gap-2"}>
+                <button
+                  type="button"
+                  onClick={onShare}
+                  className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-key text-sm font-medium text-fg"
+                >
+                  <Share2 className="size-4" />
+                  {copied ? "تم النسخ" : "مشاركة"}
+                </button>
+                {mode !== "challenge" && (
+                  <button
+                    type="button"
+                    onClick={onAgain}
+                    className="flex h-12 flex-1 items-center justify-center rounded-xl bg-fg text-sm font-semibold text-bg"
+                  >
+                    {againLabel}
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={mode === "stages" ? onMap : onStats}
+                className="mt-2 flex h-11 w-full items-center justify-center text-sm text-muted"
+              >
+                {mode === "stages" ? "الخريطة" : "الإحصائيات"}
+              </button>
+              {(mode === "daily" || mode === "challenge") && (
+                <button
+                  type="button"
+                  onClick={onHome}
+                  className="mt-1 flex h-10 w-full items-center justify-center text-sm text-muted"
+                >
+                  الرئيسية
+                </button>
+              )}
+            </>
           )}
         </>
       )}

@@ -50,8 +50,9 @@ https://supabase.com/dashboard/project/eqxaivexuowngyigmqwl/auth/users
 | `submit_daily_result` | تحقق + Anti-cheat + نتائج + Leaderboard |
 | `create_friend_challenge` | إنشاء غرفة تحدّي (كود + ١٠ دقائق) |
 | `join_friend_challenge` | انضمام بالكود وبدء المباراة |
-| `get_challenge_lobby` | حالة الانتظار / النتائج |
-| `submit_challenge_result` | تسليم نتيجة التحدّي |
+| `get_challenge_lobby` | حالة الانتظار / النتائج / تقدّم السلسلة |
+| `submit_challenge_result` | تسليم نتيجة جولة + جدولة الكلمة التالية |
+| `rematch_friend_challenge` | سلسلة جديدة بنفس الكود بعد انتهاء Best of 5 |
 | `get_leaderboard` | لوحة الصدارة |
 | `evaluate_guess` | تقييم تخمين (Wordle) |
 
