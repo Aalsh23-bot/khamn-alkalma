@@ -4,8 +4,9 @@ import { registerSimulatedAdHandler, type AdResult } from "@/lib/ads/ads";
 import type { RewardedPlacement } from "@/lib/ads/config";
 
 /**
- * In-app rewarded-ad stand-in for web and until AdMob is wired on device.
- * Native builds use real AdMob when the plugin + unit IDs are available.
+ * In-app rewarded-ad stand-in for **web / desktop only**.
+ * Native iOS/Android never use this — they call AdMob, and if fill fails the
+ * game shows a toast ("الإعلان غير متاح الآن") instead of a fake countdown UI.
  *
  * Portaled to document.body with a high z-index so it is never trapped under
  * Radix Dialog overlays (result / settings / etc.).

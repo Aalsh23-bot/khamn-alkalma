@@ -71,11 +71,6 @@ async function showNativeRewarded(placement: RewardedPlacement): Promise<AdResul
     const { AdMob, RewardAdPluginEvents } = await import("@capacitor-community/admob");
     const adId = rewardedUnitId(platform, placement);
 
-    await AdMob.prepareRewardVideoAd({
-      adId,
-      isTesting: !ADMOB.useProductionIds,
-    });
-
     return await new Promise<AdResult>((resolve) => {
       let settled = false;
       const handles: Array<{ remove: () => Promise<void> }> = [];
@@ -89,19 +84,40 @@ async function showNativeRewarded(placement: RewardedPlacement): Promise<AdResul
         resolve(result);
       };
 
-      void AdMob.addListener(RewardAdPluginEvents.Rewarded, () => {
-        finish("rewarded");
-      }).then((h) => handles.push(h));
+      const wire = async () => {
+        handles.push(
+          await AdMob.addListener(RewardAdPluginEvents.Rewarded, () => {
+            finish("rewarded");
+          }),
+        );
+        handles.push(
+          await AdMob.addListener(RewardAdPluginEvents.Dismissed, () => {
+            finish("dismissed");
+          }),
+        );
+        handles.push(
+          await AdMob.addListener(RewardAdPluginEvents.FailedToLoad, () => {
+            finish("unavailable");
+          }),
+        );
+        handles.push(
+          await AdMob.addListener(RewardAdPluginEvents.FailedToShow, () => {
+            finish("unavailable");
+          }),
+        );
 
-      void AdMob.addListener(RewardAdPluginEvents.Dismissed, () => {
-        finish("dismissed");
-      }).then((h) => handles.push(h));
+        try {
+          await AdMob.prepareRewardVideoAd({
+            adId,
+            isTesting: !ADMOB.useProductionIds,
+          });
+          await AdMob.showRewardVideoAd();
+        } catch {
+          finish("unavailable");
+        }
+      };
 
-      void AdMob.addListener(RewardAdPluginEvents.FailedToLoad, () => {
-        finish("unavailable");
-      }).then((h) => handles.push(h));
-
-      void AdMob.showRewardVideoAd().catch(() => finish("unavailable"));
+      void wire();
     });
   } catch {
     return "unavailable";
@@ -110,12 +126,11 @@ async function showNativeRewarded(placement: RewardedPlacement): Promise<AdResul
 
 /**
  * Show a rewarded ad. Resolves "rewarded" only when the user earns the reward.
- * Falls back to an in-app simulation on web / when AdMob is not linked yet.
+ * Simulation is web/dev only — never shown as a stand-in on native store builds.
  */
 export async function showRewardedAd(placement: RewardedPlacement): Promise<AdResult> {
   if (Capacitor.isNativePlatform()) {
-    const native = await showNativeRewarded(placement);
-    if (native !== "unavailable") return native;
+    return showNativeRewarded(placement);
   }
 
   if (simulatedHandler) {
