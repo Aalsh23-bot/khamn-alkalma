@@ -8,7 +8,7 @@ import { StatusBar, Style } from "@capacitor/status-bar";
 import { ADMOB } from "@/lib/ads/config";
 import { APP_NAME } from "@/lib/game/brand";
 
-export const APP_VERSION = "1.0.0";
+export const APP_VERSION = "1.0.1";
 export const APP_ID = "app.khamsa.game";
 
 export function isNativeApp(): boolean {
