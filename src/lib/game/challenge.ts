@@ -5,7 +5,6 @@ import {
   APP_STORE_URL,
   APP_URL_SCHEME,
   WEB_APP_URL,
-  challengeDeepLink,
 } from "./brand";
 
 const SALT = 0x5a3c;
@@ -121,14 +120,11 @@ export function parseChallengeCodeFromUrl(raw: string): string | null {
 }
 
 export function challengeInviteText(code: string): string {
-  const deep = challengeDeepLink(code);
   return [
     `تحدّيتُك في ${APP_NAME}!`,
     `الكود: ${code}`,
-    "اضغط الرابط لفتح التحدّي مباشرة بالتطبيق:",
-    deep,
+    "نزّل التطبيق من App Store وادخل الكود في تحدّي الأصدقاء.",
     "",
-    "ما عندك التطبيق؟ حمّله من هنا:",
     APP_STORE_URL,
   ].join("\n");
 }
