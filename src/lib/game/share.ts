@@ -1,8 +1,8 @@
 import type { LetterStatus } from "./evaluate";
 import { formatArabicDate } from "./daily";
-import { challengeAbsoluteUrl, challengeInviteText } from "./challenge";
+import { challengeInviteText } from "./challenge";
 import { isNativeApp, nativeShare } from "@/lib/native";
-import { APP_NAME } from "./brand";
+import { APP_NAME, APP_STORE_URL } from "./brand";
 import type { Mode } from "./storage";
 
 const GLYPH: Record<LetterStatus, string> = {

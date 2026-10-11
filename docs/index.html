@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>خمن الكلمة</title>
+  <style>
+    :root {
+      --bg: #f3eee4;
+      --fg: #1c1917;
+      --muted: #78716c;
+      --accent: #2f6b4f;
+      --accent-fg: #fff;
+      --card: #fffdf8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      font-family: "SF Pro Text", "Segoe UI", Tahoma, sans-serif;
+      background:
+        radial-gradient(1200px 500px at 80% -10%, #dfece4 0%, transparent 55%),
+        radial-gradient(900px 400px at -10% 100%, #ebe4d4 0%, transparent 50%),
+        var(--bg);
+      color: var(--fg);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    main {
+      width: min(100%, 420px);
+      background: var(--card);
+      border-radius: 24px;
+      padding: 28px 22px;
+      box-shadow: 0 1px 0 rgba(28, 25, 23, 0.06), 0 18px 40px rgba(28, 25, 23, 0.08);
+      text-align: center;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.75rem;
+      letter-spacing: -0.02em;
+    }
+    p { margin: 10px 0 0; color: var(--muted); line-height: 1.7; font-size: 0.98rem; }
+    .code {
+      margin: 22px 0 8px;
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      font-variant-numeric: tabular-nums;
+      direction: ltr;
+    }
+    .code.empty { display: none; }
+    a.btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 20px;
+      height: 48px;
+      border-radius: 14px;
+      background: var(--accent);
+      color: var(--accent-fg);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    a.secondary {
+      display: inline-block;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>خمن الكلمة</h1>
+    <p id="lead">لعبة الكلمات العربية — تحدَّ أصدقاءك على الآيفون.</p>
+    <div id="codeBox" class="code empty" aria-live="polite"></div>
+    <p id="hint" hidden>افتح التطبيق وادخل هذا الكود في تحدّي الأصدقاء.</p>
+    <a class="btn" href="https://apps.apple.com/app/id6817761811">حمّل من App Store</a>
+    <a class="secondary" href="./privacy.html">سياسة الخصوصية</a>
+  </main>
+  <script>
+    (function () {
+      try {
+        var c = new URLSearchParams(location.search).get("c");
+        if (!c) return;
+        c = String(c).trim().toUpperCase();
+        if (!/^[0-9A-Z]{4,12}$/.test(c)) return;
+        var box = document.getElementById("codeBox");
+        box.textContent = c;
+        box.classList.remove("empty");
+        document.getElementById("lead").textContent = "تحدّوك في خمن الكلمة";
+        document.getElementById("hint").hidden = false;
+      } catch (e) {}
+    })();
+  </script>
+</body>
+</html>
