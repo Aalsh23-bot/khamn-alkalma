@@ -75,8 +75,9 @@
     <h1>خمن الكلمة</h1>
     <p id="lead">لعبة الكلمات العربية — تحدَّ أصدقاءك على الآيفون.</p>
     <div id="codeBox" class="code empty" aria-live="polite"></div>
-    <p id="hint" hidden>افتح التطبيق وادخل هذا الكود في تحدّي الأصدقاء.</p>
-    <a class="btn" href="https://apps.apple.com/app/id6817761811">حمّل من App Store</a>
+    <p id="hint" hidden>اضغط الزر لفتح التحدّي مباشرة بالتطبيق.</p>
+    <a class="btn" id="primary" href="https://apps.apple.com/app/id6817761811">حمّل من App Store</a>
+    <a class="secondary" id="store" href="https://apps.apple.com/app/id6817761811" hidden>ما فتح التطبيق؟ حمّله من App Store</a>
     <a class="secondary" href="./privacy.html">سياسة الخصوصية</a>
   </main>
   <script>
@@ -91,6 +92,15 @@
         box.classList.remove("empty");
         document.getElementById("lead").textContent = "تحدّوك في خمن الكلمة";
         document.getElementById("hint").hidden = false;
+        var deep = "khamsa://challenge?c=" + encodeURIComponent(c);
+        var primary = document.getElementById("primary");
+        primary.textContent = "افتح التحدّي بالتطبيق";
+        primary.setAttribute("href", deep);
+        document.getElementById("store").hidden = false;
+        // Try to open the app immediately when installed.
+        window.setTimeout(function () {
+          window.location.href = deep;
+        }, 350);
       } catch (e) {}
     })();
   </script>
