@@ -2,7 +2,7 @@ import type { LetterStatus } from "./evaluate";
 import { formatArabicDate } from "./daily";
 import { challengeInviteText } from "./challenge";
 import { isNativeApp, nativeShare } from "@/lib/native";
-import { APP_NAME, APP_STORE_URL, challengeDeepLink } from "./brand";
+import { APP_NAME, APP_STORE_URL } from "./brand";
 import type { Mode } from "./storage";
 
 const GLYPH: Record<LetterStatus, string> = {
@@ -37,12 +37,7 @@ export function shareText(opts: {
         : `${APP_NAME} ${opts.puzzleNum}${star} ${score}/${opts.max}`;
   const lines = [label, formatArabicDate(opts.dateKey), "", `${ltr}${rows}${pdf}`];
   if (opts.mode === "challenge" && opts.challengeCode) {
-    lines.push(
-      "",
-      `الكود: ${opts.challengeCode}`,
-      challengeDeepLink(opts.challengeCode),
-      APP_STORE_URL,
-    );
+    lines.push("", `الكود: ${opts.challengeCode}`, APP_STORE_URL);
   }
   return lines.join("\n");
 }
