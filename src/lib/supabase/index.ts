@@ -36,6 +36,7 @@ export {
   adminUpsertWord,
   adminSetWordFlags,
   joinFriendChallenge,
+  rematchFriendChallenge,
   submitChallengeResult,
   submitDailyResult,
   challengeOutcome,

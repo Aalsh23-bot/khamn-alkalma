@@ -43,6 +43,7 @@ export function Game() {
   const startStage = useGame((s) => s.startStage);
   const startChallenge = useGame((s) => s.startChallenge);
   const newChallenge = useGame((s) => s.newChallenge);
+  const rematchChallenge = useGame((s) => s.rematchChallenge);
   const createOnlineChallenge = useGame((s) => s.createOnlineChallenge);
   const joinChallengeWithCode = useGame((s) => s.joinChallengeWithCode);
   const refreshChallengeLobby = useGame((s) => s.refreshChallengeLobby);
@@ -267,6 +268,7 @@ export function Game() {
         }}
         onRetryNewWord={() => retryStageNewWord()}
         onNewChallenge={() => newChallenge()}
+        onRematchChallenge={() => rematchChallenge()}
         onAgain={() => {
           if (mode === "stages") {
             if (status === "won") {
