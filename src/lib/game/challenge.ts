@@ -1,6 +1,6 @@
 import { ANSWERS } from "./words";
 import { dailyPool } from "./daily";
-import { APP_NAME, WEB_APP_URL } from "./brand";
+import { APP_NAME, APP_STORE_URL, WEB_APP_URL } from "./brand";
 
 const SALT = 0x5a3c;
 
@@ -85,12 +85,11 @@ export function clearChallengeCodeFromUrl() {
 }
 
 export function challengeInviteText(code: string): string {
-  const url = challengeAbsoluteUrl(code);
   return [
     `تحدّيتُك في ${APP_NAME}!`,
     `الكود: ${code}`,
-    "ادخل الكود في التطبيق ونبدأ التحدّي مع بعض.",
+    "نزّل التطبيق من App Store وادخل الكود في تحدّي الأصدقاء.",
     "",
-    url,
+    APP_STORE_URL,
   ].join("\n");
 }
