@@ -1,6 +1,12 @@
 import { ANSWERS } from "./words";
 import { dailyPool } from "./daily";
-import { APP_NAME, APP_STORE_URL, WEB_APP_URL } from "./brand";
+import {
+  APP_NAME,
+  APP_STORE_URL,
+  APP_URL_SCHEME,
+  WEB_APP_URL,
+  challengeDeepLink,
+} from "./brand";
 
 const SALT = 0x5a3c;
 
@@ -84,12 +90,45 @@ export function clearChallengeCodeFromUrl() {
   }
 }
 
+/** Extract a challenge code from custom-scheme or https invite URLs. */
+export function parseChallengeCodeFromUrl(raw: string): string | null {
+  try {
+    const url = new URL(raw);
+    const fromQuery = url.searchParams.get("c");
+    if (fromQuery && /^[0-9a-z]{4,12}$/i.test(fromQuery)) {
+      return fromQuery.trim().toUpperCase();
+    }
+    const parts = url.pathname.split("/").filter(Boolean);
+    if (
+      parts.length >= 2 &&
+      (parts[0] === "challenge" || parts[0] === "c") &&
+      /^[0-9a-z]{4,12}$/i.test(parts[1]!)
+    ) {
+      return parts[1]!.toUpperCase();
+    }
+    // khamsa://CODE
+    if (
+      url.protocol === `${APP_URL_SCHEME}:` &&
+      url.hostname &&
+      /^[0-9a-z]{4,12}$/i.test(url.hostname)
+    ) {
+      return url.hostname.toUpperCase();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function challengeInviteText(code: string): string {
+  const deep = challengeDeepLink(code);
   return [
     `تحدّيتُك في ${APP_NAME}!`,
     `الكود: ${code}`,
-    "نزّل التطبيق من App Store وادخل الكود في تحدّي الأصدقاء.",
+    "اضغط الرابط لفتح التحدّي مباشرة بالتطبيق:",
+    deep,
     "",
+    "ما عندك التطبيق؟ حمّله من هنا:",
     APP_STORE_URL,
   ].join("\n");
 }

@@ -7,9 +7,27 @@ import { SplashScreen } from "@capacitor/splash-screen";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { ADMOB } from "@/lib/ads/config";
 import { APP_NAME } from "@/lib/game/brand";
+import { parseChallengeCodeFromUrl } from "@/lib/game/challenge";
 
 export const APP_VERSION = "1.0.1";
 export const APP_ID = "app.khamsa.game";
+
+function openChallengeFromIncomingUrl(raw: string): void {
+  const code = parseChallengeCodeFromUrl(raw);
+  if (!code) return;
+  void import("@/lib/game/store").then(({ useGame }) => {
+    const join = useGame.getState().joinChallengeWithCode;
+    // Defer until hydrate finishes if the store is still booting.
+    const tryJoin = () => {
+      if (!useGame.getState().hydrated) {
+        window.setTimeout(tryJoin, 80);
+        return;
+      }
+      join(code);
+    };
+    tryJoin();
+  });
+}
 
 export function isNativeApp(): boolean {
   if (typeof window === "undefined") return false;
@@ -83,6 +101,18 @@ export async function bootstrapNative(): Promise<void> {
   } catch {
     /* AdMob optional until store IDs are ready */
   }
+
+  // Deep links: khamsa://challenge?c=CODE → join friend challenge.
+  try {
+    void App.getLaunchUrl().then((launch) => {
+      if (launch?.url) openChallengeFromIncomingUrl(launch.url);
+    });
+  } catch {
+    /* optional */
+  }
+  void App.addListener("appUrlOpen", ({ url }) => {
+    openChallengeFromIncomingUrl(url);
+  });
 
   void App.addListener("backButton", ({ canGoBack }) => {
     void import("@/lib/game/store").then(({ useGame }) => {
