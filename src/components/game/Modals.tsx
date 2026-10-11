@@ -663,7 +663,7 @@ export function ResultModal({
                 onClick={onRematchChallenge}
                 className="flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
               >
-                مع نفس الصديق (نفس الكود)
+                إعادة التحدّي
               </button>
               <button
                 type="button"
@@ -734,7 +734,7 @@ export function ResultModal({
                 onClick={onRematchChallenge}
                 className="flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg"
               >
-                مع نفس الصديق (نفس الكود)
+                إعادة التحدّي
               </button>
               <button
                 type="button"
