@@ -185,6 +185,66 @@ export interface Database {
         };
         Relationships: [];
       };
+      analytics_events: {
+        Row: {
+          id: string;
+          created_at: string;
+          device_id: string;
+          name: string;
+          payload: Record<string, unknown>;
+          app_version: string | null;
+          platform: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          device_id: string;
+          name: string;
+          payload?: Record<string, unknown>;
+          app_version?: string | null;
+          platform?: string | null;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          device_id?: string;
+          name?: string;
+          payload?: Record<string, unknown>;
+          app_version?: string | null;
+          platform?: string | null;
+        };
+        Relationships: [];
+      };
+      ad_reports: {
+        Row: {
+          id: string;
+          created_at: string;
+          device_id: string;
+          reason: string;
+          note: string | null;
+          app_version: string | null;
+          platform: string | null;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          device_id: string;
+          reason: string;
+          note?: string | null;
+          app_version?: string | null;
+          platform?: string | null;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          device_id?: string;
+          reason?: string;
+          note?: string | null;
+          app_version?: string | null;
+          platform?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       daily_puzzles_public: {

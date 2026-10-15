@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { BarChart3, HelpCircle, House, Lightbulb, Settings2, Share2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Mode } from "@/lib/game/store";
+import type { HintOfferKind } from "@/lib/game/hint-economy";
+import { hintOfferLabel, loadHintBalance } from "@/lib/game/hint-economy";
 
 function IconBtn({
   label,
@@ -9,12 +11,14 @@ function IconBtn({
   children,
   active,
   disabled,
+  className,
 }: {
   label: string;
   onClick: () => void;
   children: ReactNode;
   active?: boolean;
   disabled?: boolean;
+  className?: string;
 }) {
   return (
     <button
@@ -27,6 +31,7 @@ function IconBtn({
         "relative flex size-11 items-center justify-center rounded-xl text-fg transition-colors duration-150",
         "hover:bg-fg/6 active:scale-[0.96] disabled:opacity-35",
         active && "bg-accent/12 text-accent",
+        className,
       )}
     >
       {children}
@@ -46,6 +51,7 @@ export function Header({
   hintUsed,
   hintDisabled,
   hintAwaitingGuess,
+  hintOffer = "ad",
 }: {
   mode: Mode;
   stageLevel: number;
@@ -58,12 +64,26 @@ export function Header({
   hintUsed: boolean;
   hintDisabled: boolean;
   hintAwaitingGuess?: boolean;
+  hintOffer?: HintOfferKind;
 }) {
-  const hintLabel = hintUsed
-    ? "استُخدم التلميحان"
+  const kind: HintOfferKind = hintUsed
+    ? "exhausted"
     : hintAwaitingGuess
-      ? "أدخل تخميناً ثم استخدم التلميح مرة أخرى"
-      : "كشف حرف مقابل إعلان";
+      ? "exhausted"
+      : hintOffer;
+
+  const hintLabel = hintAwaitingGuess
+    ? "أدخل تخميناً ثم استخدم التلميح مرة أخرى"
+    : hintOfferLabel(kind, loadHintBalance());
+
+  const hintTone =
+    kind === "free"
+      ? "bg-correct/20"
+      : kind === "ad"
+        ? "bg-present/25"
+        : kind === "balance"
+          ? "bg-accent/12 text-accent"
+          : undefined;
 
   return (
     <header className="flex items-center justify-between gap-1 border-b border-line px-1 py-1">
@@ -97,8 +117,16 @@ export function Header({
           onClick={onHint}
           active={hintUsed || Boolean(hintAwaitingGuess)}
           disabled={hintDisabled}
+          className={hintTone}
         >
-          <Lightbulb className="size-5" strokeWidth={1.8} />
+          <span className="flex flex-col items-center gap-0.5">
+            <Lightbulb className="size-5" strokeWidth={1.8} />
+            {!hintUsed && !hintAwaitingGuess && (
+              <span className="max-w-[4.5rem] truncate text-[8px] font-semibold leading-none">
+                {kind === "free" ? "مجاني" : kind === "ad" ? "إعلان" : kind === "balance" ? "رصيد" : ""}
+              </span>
+            )}
+          </span>
         </IconBtn>
         <IconBtn label="الإحصائيات" onClick={onStats}>
           <BarChart3 className="size-5" strokeWidth={1.8} />

@@ -5,8 +5,8 @@ import {
   type LetterStatus,
 } from "./evaluate";
 import { MAX_GUESSES, WORD_LENGTH, normalizeWord } from "./normalize";
-import { dailyAnswer, localDateKey, puzzleNumber } from "./daily";
-import { displayWord, isValidGuess, stageAnswer, STAGE_COUNT } from "./words";
+import { localDateKey, puzzleNumber } from "./daily";
+import { displayWord, isValidGuess, STAGE_COUNT } from "./words";
 import {
   applyAchievements,
   evaluateNewAchievements,
@@ -56,6 +56,21 @@ import {
   saveCachedLexicon,
   shouldRefreshLexicon,
 } from "./lexicon-sync";
+import { MAX_HINTS_PER_ROUND } from "./store-constants";
+import {
+  freshChallenge,
+  freshDaily,
+  freshStage,
+  roundFromSave,
+} from "./store-rounds";
+import {
+  consumeFreeHint,
+  consumePurchasedHint,
+  resolveHintOffer,
+} from "./hint-economy";
+import { trackEvent } from "@/lib/analytics";
+
+export { MAX_HINTS_PER_ROUND } from "./store-constants";
 
 function syncDailyResult(guesses: string[], won: boolean, hardMode: boolean) {
   void submitDailyResult({ guesses, won, hardMode }).catch(() => {
@@ -189,108 +204,6 @@ function persist(get: () => GameStore) {
   } catch {
     /* storage blocked */
   }
-}
-
-export const MAX_HINTS_PER_ROUND = 2;
-
-function freshDaily() {
-  const dateKey = localDateKey();
-  return {
-    mode: "daily" as const,
-    dateKey,
-    puzzleNum: puzzleNumber(dateKey),
-    stageLevel: 0,
-    answer: dailyAnswer(dateKey),
-    guesses: [] as string[],
-    evaluations: [] as LetterStatus[][],
-    current: "",
-    status: "playing" as const,
-    hintUsed: false,
-    hintCount: 0,
-    hintAwaitingGuess: false,
-    hintedCols: [] as number[],
-    revealing: false,
-    shake: false,
-    challengeCode: null as string | null,
-  };
-}
-
-function freshStage(level: number, order: number[]) {
-  const dateKey = localDateKey();
-  return {
-    mode: "stages" as const,
-    dateKey,
-    puzzleNum: level,
-    stageLevel: level,
-    answer: stageAnswer(level, order),
-    guesses: [] as string[],
-    evaluations: [] as LetterStatus[][],
-    current: "",
-    status: "playing" as const,
-    hintUsed: false,
-    hintCount: 0,
-    hintAwaitingGuess: false,
-    hintedCols: [] as number[],
-    revealing: false,
-    shake: false,
-    challengeCode: null as string | null,
-  };
-}
-
-function freshChallenge(answer: string, code: string) {
-  const dateKey = localDateKey();
-  return {
-    mode: "challenge" as const,
-    dateKey,
-    puzzleNum: 0,
-    stageLevel: 0,
-    answer,
-    guesses: [] as string[],
-    evaluations: [] as LetterStatus[][],
-    current: "",
-    status: "playing" as const,
-    hintUsed: false,
-    hintCount: 0,
-    hintAwaitingGuess: false,
-    hintedCols: [] as number[],
-    revealing: false,
-    shake: false,
-    challengeCode: code,
-  };
-}
-
-function roundFromSave(
-  saved: NonNullable<ReturnType<typeof loadRound>>,
-  extras: {
-    mode: Mode;
-    puzzleNum: number;
-    stageLevel: number;
-    dateKey: string;
-    challengeCode?: string | null;
-  },
-) {
-  const hintCount = Math.min(
-    MAX_HINTS_PER_ROUND,
-    Math.max(
-      0,
-      saved.hintCount ?? (saved.hintUsed ? 1 : 0),
-    ),
-  );
-  return {
-    ...extras,
-    answer: saved.answer,
-    guesses: saved.guesses,
-    evaluations: saved.evaluations,
-    current: saved.status === "playing" ? saved.current : "",
-    status: saved.status,
-    hintCount,
-    hintUsed: hintCount >= MAX_HINTS_PER_ROUND,
-    hintAwaitingGuess: Boolean(saved.hintAwaitingGuess),
-    hintedCols: saved.hintedCols ?? [],
-    revealing: false,
-    shake: false,
-    challengeCode: extras.challengeCode ?? saved.challengeCode ?? null,
-  };
 }
 
 function unlockAchievements(
@@ -488,10 +401,12 @@ export const useGame = create<GameStore>((set, get) => ({
         revealing: false,
         shake: false,
       });
+      trackEvent("app_open", { via: "invite" });
       get().joinChallengeWithCode(inviteCode);
       return;
     }
 
+    const firstRunHelp = !settings.seenHelp;
     set({
       hydrated: true,
       screen: "home",
@@ -500,11 +415,16 @@ export const useGame = create<GameStore>((set, get) => ({
       stages,
       achievements,
       challengeStats,
-      modal: achievements.pending.length ? "badge" : null,
+      modal: achievements.pending.length
+        ? "badge"
+        : firstRunHelp
+          ? "help"
+          : null,
       toast: null,
       revealing: false,
       shake: false,
     });
+    trackEvent("app_open", {});
   },
 
   goHome: () => {
@@ -544,9 +464,11 @@ export const useGame = create<GameStore>((set, get) => ({
         toast: null,
         revealing: false,
       });
+      trackEvent("game_start", { mode: "daily", resumed: true });
       return;
     }
     set({ screen: "play", ...freshDaily(), modal: null, toast: null });
+    trackEvent("game_start", { mode: "daily", resumed: false });
     persist(get);
   },
 
@@ -718,6 +640,7 @@ export const useGame = create<GameStore>((set, get) => ({
         toast: null,
         revealing: false,
       });
+      trackEvent("game_start", { mode: "stages", stage: level, resumed: true });
       return;
     }
     set({
@@ -726,6 +649,7 @@ export const useGame = create<GameStore>((set, get) => ({
       modal: null,
       toast: null,
     });
+    trackEvent("game_start", { mode: "stages", stage: level, resumed: false });
     persist(get);
   },
 
@@ -967,6 +891,9 @@ export const useGame = create<GameStore>((set, get) => ({
         return;
       }
     }
+    const offer = resolveHintOffer(MAX_HINTS_PER_ROUND - s.hintCount, localDateKey());
+    if (offer === "exhausted") return;
+
     const known = new Set<number>();
     for (let g = 0; g < s.guesses.length; g++) {
       const ev = s.evaluations[g] ?? [];
@@ -981,6 +908,10 @@ export const useGame = create<GameStore>((set, get) => ({
       set({ toast: "كل الحروف مكشوفة" });
       return;
     }
+    if (offer === "free") consumeFreeHint(localDateKey());
+    else if (offer === "balance") {
+      if (!consumePurchasedHint()) return;
+    }
     const col = unknown[0]!;
     const hintCount = s.hintCount + 1;
     set({
@@ -988,7 +919,15 @@ export const useGame = create<GameStore>((set, get) => ({
       hintUsed: hintCount >= MAX_HINTS_PER_ROUND,
       hintAwaitingGuess: true,
       hintedCols: [...s.hintedCols, col],
-      toast: `الحرف في الموضع ${col + 1} هو «${s.answer[col]}»`,
+      toast:
+        offer === "ad"
+          ? `حصلت على تلميح · الحرف في الموضع ${col + 1} هو «${s.answer[col]}»`
+          : `الحرف في الموضع ${col + 1} هو «${s.answer[col]}»`,
+    });
+    trackEvent("hint_used", {
+      kind: offer,
+      mode: s.mode,
+      stage: s.mode === "stages" ? s.stageLevel : null,
     });
     persist(get);
   },

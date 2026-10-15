@@ -1,6 +1,6 @@
 {
   "name": "khamsa",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "sideEffects": false,
   "type": "module",
@@ -17,7 +17,7 @@
     "preview:stop": "node scripts/preview.mjs stop",
     "typecheck": "tsc --noEmit",
     "check:auth": "node scripts/check-auth-invariant.mjs",
-    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/auth/gate-identity.test.ts",
+    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/auth/gate-identity.test.ts && tsx --test src/lib/game/evaluate.test.ts src/lib/game/normalize.test.ts src/lib/game/challenge.test.ts src/lib/game/daily.test.ts src/lib/game/hint-economy.test.ts",
     "lint": "eslint .",
     "native:build": "vite build --config vite.native.config.ts && rm -rf dist-native/__grok dist-native/og.jpg dist-native/x-banner.jpg",
     "native:sync": "npm run native:build && npx cap sync",
@@ -114,6 +114,7 @@
     "patch-package": "^8.0.1",
     "playwright": "^1.62.0",
     "prettier": "^3.4.0",
+    "tsx": "^4.20.5",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.56.1",
     "vite": "^8.2.0"

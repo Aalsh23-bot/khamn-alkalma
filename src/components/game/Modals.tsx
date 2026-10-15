@@ -91,44 +91,107 @@ function MiniTile({ status, letter }: { status?: LetterStatus; letter: string })
 }
 
 export function HelpModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return (
-    <Shell open={open} onClose={onClose} title="كيف تلعب">
-      <div className="space-y-4 text-[15px] leading-7 text-fg">
-        <p className="text-pretty">خمس خانات وست محاولات. بعد كل تخمين يتلوّن الحرف:</p>
-        <div className="flex items-center gap-2">
-          <MiniTile status="correct" letter="م" />
-          <p>صحيح وفي موضعه</p>
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    if (open) setStep(0);
+  }, [open]);
+  const steps = [
+    {
+      title: "فكرة اللعبة",
+      body: (
+        <div className="space-y-3 text-[15px] leading-7 text-fg">
+          <p className="text-pretty">
+            خمّن كلمة عربية من خمس حروف خلال ست محاولات. كل تخمين يجب أن يكون كلمة صحيحة.
+          </p>
+          <p className="text-sm text-muted">
+            عندك ثلاثة أوضاع: كلمة اليوم، المراحل، وتحدّي الأصدقاء (أفضل من ٥).
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <MiniTile status="present" letter="د" />
-          <p>في الكلمة بموضع آخر</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <MiniTile status="absent" letter="ر" />
-          <p>غير موجود</p>
-        </div>
-        <div className="rounded-xl bg-bg p-3 text-sm leading-7 text-muted">
-          <p className="mb-2 font-medium text-fg">ه و ة حرفان مختلفان · ى و ي مختلفان</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <MiniTile letter="ه" />
-            <MiniTile letter="ة" />
-            <MiniTile letter="ى" />
-            <MiniTile letter="ي" />
-            <MiniTile letter="ئ" />
-            <MiniTile letter="ؤ" />
+      ),
+    },
+    {
+      title: "معنى الألوان",
+      body: (
+        <div className="space-y-3 text-[15px] leading-7 text-fg">
+          <div className="flex items-center gap-2">
+            <MiniTile status="correct" letter="م" />
+            <p>🟩 صحيح وفي موضعه</p>
           </div>
-          <p className="mt-2">ا / أ / إ / آ حرف واحد.</p>
-          <p className="mt-1">ئ و ؤ حرفان مستقلان (مثل: حقائق، مؤتمر).</p>
-          <p className="mt-2">زر المصباح اختياري: شاهد إعلاناً لكشف حرف صحيح.</p>
-          <p className="mt-1">بعد الخسارة يمكنك مشاهدة إعلان لاستعادة المحاولة، أو إعادة المرحلة بكلمة جديدة.</p>
+          <div className="flex items-center gap-2">
+            <MiniTile status="present" letter="د" />
+            <p>🟨 في الكلمة بموضع آخر</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <MiniTile status="absent" letter="ر" />
+            <p>⬛ غير موجود في الكلمة</p>
+          </div>
+          <div className="rounded-xl bg-bg p-3 text-sm leading-7 text-muted">
+            <p className="mb-2 font-medium text-fg">ه و ة مختلفان · ى و ي مختلفان</p>
+            <p>ا / أ / إ / آ حرف واحد. ئ و ؤ مستقلان.</p>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg transition-transform duration-150 active:scale-[0.98]"
-        >
-          حسناً
-        </button>
+      ),
+    },
+    {
+      title: "التلميحات والأوضاع",
+      body: (
+        <div className="space-y-3 text-[15px] leading-7 text-fg">
+          <p>أول تلميح كل يوم مجاني في كل الأوضاع. بعده تلميح مقابل إعلان مكافأة اختياري.</p>
+          <p className="text-sm text-muted">
+            بعد الخسارة يمكنك مشاهدة إعلان لاستعادة المحاولة، أو في المراحل تجربة كلمة جديدة.
+          </p>
+          <p className="text-sm text-muted">يمكنك إعادة هذا الشرح من زر ❓ في أي وقت.</p>
+        </div>
+      ),
+    },
+  ] as const;
+
+  return (
+    <Shell
+      open={open}
+      onClose={() => {
+        setStep(0);
+        onClose();
+      }}
+      title={steps[step]!.title}
+    >
+      <div className="space-y-4">
+        <p className="text-xs text-muted">
+          خطوة {step + 1} من {steps.length}
+        </p>
+        {steps[step]!.body}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setStep(0);
+              onClose();
+            }}
+            className="flex h-12 flex-1 items-center justify-center rounded-xl bg-key text-sm font-medium text-fg"
+          >
+            تخطي
+          </button>
+          {step < steps.length - 1 ? (
+            <button
+              type="button"
+              onClick={() => setStep((s) => s + 1)}
+              className="flex h-12 flex-1 items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg"
+            >
+              التالي
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setStep(0);
+                onClose();
+              }}
+              className="flex h-12 flex-1 items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg"
+            >
+              ابدأ اللعب
+            </button>
+          )}
+        </div>
       </div>
     </Shell>
   );
@@ -235,6 +298,7 @@ export function SettingsModal({
   onSound,
   onInstall,
   onPrivacy,
+  onReportAd,
   onAuth,
   onWordsAdmin,
   authLabel,
@@ -248,6 +312,7 @@ export function SettingsModal({
   onSound: (v: boolean) => void;
   onInstall: () => void;
   onPrivacy: () => void;
+  onReportAd?: () => void;
   onAuth: () => void;
   onWordsAdmin?: () => void;
   authLabel?: string | null;
@@ -295,6 +360,15 @@ export function SettingsModal({
           تثبيت على الجوال
         </button>
       )}
+      {onReportAd && (
+        <button
+          type="button"
+          onClick={onReportAd}
+          className="mt-3 flex h-12 w-full items-center justify-center rounded-xl bg-key text-sm font-medium text-fg transition-transform duration-150 active:scale-[0.98]"
+        >
+          إبلاغ عن إعلان
+        </button>
+      )}
       <button
         type="button"
         onClick={onPrivacy}
@@ -303,7 +377,7 @@ export function SettingsModal({
         سياسة الخصوصية
       </button>
       {isNative && (
-        <p className="mt-4 text-center text-xs text-muted">خمن الكلمة ١.٠ · على جهازك فقط</p>
+        <p className="mt-4 text-center text-xs text-muted">خمن الكلمة ١.٠.٢ · على جهازك فقط</p>
       )}
     </Shell>
   );

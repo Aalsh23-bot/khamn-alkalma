@@ -30,6 +30,11 @@ import { showRewardedAd } from "@/lib/ads/ads";
 import { fetchIsAppAdmin } from "@/lib/supabase/api";
 import { useSupabaseAuth } from "@/lib/supabase/use-auth";
 import { RewardedAdOverlay } from "./RewardedAdOverlay";
+import {
+  MAX_HINTS_PER_ROUND,
+} from "@/lib/game/store";
+import { resolveHintOffer } from "@/lib/game/hint-economy";
+import { AdReportModal } from "./AdReportModal";
 
 export function Game() {
   const hydrated = useGame((s) => s.hydrated);
@@ -63,6 +68,7 @@ export function Game() {
   const shake = useGame((s) => s.shake);
   const hintedCols = useGame((s) => s.hintedCols);
   const hintUsed = useGame((s) => s.hintUsed);
+  const hintCount = useGame((s) => s.hintCount);
   const hintAwaitingGuess = useGame((s) => s.hintAwaitingGuess);
   const toast = useGame((s) => s.toast);
   const modal = useGame((s) => s.modal);
@@ -85,10 +91,14 @@ export function Game() {
   const setSound = useGame((s) => s.setSound);
 
   const [adBusy, setAdBusy] = useState(false);
+  const [adReportOpen, setAdReportOpen] = useState(false);
   const auth = useSupabaseAuth();
   const authLabel = auth.user?.displayName || auth.user?.email || null;
   const [isAdmin, setIsAdmin] = useState(false);
   const authOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hintOffer = resolveHintOffer(
+    Math.max(0, MAX_HINTS_PER_ROUND - hintCount),
+  );
 
   /** Defer so the opening tap does not dismiss the newly opened auth dialog. */
   function openAuthModal() {
@@ -200,11 +210,20 @@ export function Game() {
         onSound={setSound}
         onInstall={() => setModal("install")}
         onPrivacy={() => setModal("privacy")}
+        onReportAd={() => {
+          setModal(null);
+          setAdReportOpen(true);
+        }}
         onAuth={openAuthModal}
         onWordsAdmin={() => setModal("wordsAdmin")}
         showWordsAdmin={isAdmin}
         authLabel={authLabel}
         isNative={isNativeApp()}
+      />
+      <AdReportModal
+        open={adReportOpen}
+        onClose={() => setAdReportOpen(false)}
+        onSubmitted={() => setToast("شكراً، وصلنا بلاغك")}
       />
       <WordsAdminModal
         open={modal === "wordsAdmin"}
@@ -374,11 +393,20 @@ export function Game() {
         onHint={() => {
           void (async () => {
             if (adBusy || hintUsed || hintAwaitingGuess || inputLocked) return;
+            const offer = resolveHintOffer(
+              Math.max(0, MAX_HINTS_PER_ROUND - hintCount),
+            );
+            if (offer === "free" || offer === "balance") {
+              useHint();
+              return;
+            }
+            if (offer !== "ad") return;
             setAdBusy(true);
             try {
               const result = await showRewardedAd("hint");
               if (result === "rewarded") useHint();
-              else if (result === "dismissed") setToast("شاهِد الإعلان للنهاية لكشف حرف");
+              else if (result === "dismissed")
+                setToast("شاهِد الإعلان للنهاية لكشف حرف");
               else setToast("الإعلان غير متاح الآن");
             } finally {
               setAdBusy(false);
@@ -387,6 +415,7 @@ export function Game() {
         }}
         hintUsed={hintUsed}
         hintAwaitingGuess={hintAwaitingGuess}
+        hintOffer={hintOffer}
         hintDisabled={inputLocked || hintUsed || hintAwaitingGuess || adBusy}
       />
 
