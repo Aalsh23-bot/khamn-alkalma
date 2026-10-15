@@ -69,15 +69,9 @@ export function HintShopModal({
             باقات التلميحات
           </Dialog.Title>
           <Dialog.Description className="mt-2 text-sm leading-6 text-muted">
-            اشترِ رصيداً واستخدمه بدل مشاهدة إعلان. رصيدك الحالي:{" "}
+            اشترِ رصيد تلميحات. رصيدك الحالي:{" "}
             <span className="font-semibold text-fg tabular-nums">{balance}</span>
           </Dialog.Description>
-
-          {!isIapSupported() && (
-            <p className="mt-3 rounded-xl bg-bg px-3 py-2 text-sm text-muted">
-              الشراء يعمل داخل تطبيق iOS بعد تفعيل المنتجات وRevenueCat.
-            </p>
-          )}
 
           <div className="mt-4 space-y-2">
             {loading && (
