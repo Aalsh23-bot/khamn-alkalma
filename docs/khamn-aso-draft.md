@@ -28,11 +28,12 @@ https://aalsh23-bot.github.io/khamn-alkalma/privacy.html
 ## ما الجديد 1.0.2
 ✨ الجديد:
 • 💡 تلميح مجاني كل يوم في كل الأوضاع
-• ▶️ زر التلميح يوضح نوعه: مجاني أو مقابل إعلان
+• ▶️ زر التلميح يوضح نوعه: مجاني أو مقابل إعلان أو من الرصيد
+• 🛒 باقات تلميحات اختيارية (5 / 20 / 60) بدل مشاهدة إعلان
 • 📖 شرح سريع بـ 3 خطوات أول ما تفتح اللعبة، وترجع له من زر ❓
 • 🚩 زر للإبلاغ عن أي إعلان غير لائق
 • 🛠️ تحسين ثبات الإعلانات وإصلاحات بسيطة
 شكراً لدعمكم! قيّمونا ⭐
 
 ## Review Notes (EN)
-Optional rewarded ads only (no forced interstitials). Anonymous analytics use a random device UUID — no IDFA linkage for analytics, no tracking for product events. Account deletion: Settings → Account → Delete account. Ad report: Settings → Report ad.
+Optional rewarded ads only (no forced interstitials). Optional consumable hint packs via StoreKit/RevenueCat (product IDs: hints_5, hints_20, hints_60). Anonymous analytics use a random device UUID — no tracking for product events. Account deletion: Settings → Account → Delete account. Ad report: Settings → Report ad. Hint shop: Settings → باقات التلميحات.

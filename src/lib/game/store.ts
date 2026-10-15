@@ -425,6 +425,14 @@ export const useGame = create<GameStore>((set, get) => ({
       shake: false,
     });
     trackEvent("app_open", {});
+    void import("@/lib/iap/purchases")
+      .then(async (m) => {
+        await m.initPurchases();
+        await m.syncHintBalanceFromServer();
+      })
+      .catch(() => {
+        /* IAP optional until keys/products are live */
+      });
   },
 
   goHome: () => {

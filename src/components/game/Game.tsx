@@ -35,6 +35,7 @@ import {
 } from "@/lib/game/store";
 import { resolveHintOffer } from "@/lib/game/hint-economy";
 import { AdReportModal } from "./AdReportModal";
+import { HintShopModal } from "./HintShopModal";
 
 export function Game() {
   const hydrated = useGame((s) => s.hydrated);
@@ -92,13 +93,17 @@ export function Game() {
 
   const [adBusy, setAdBusy] = useState(false);
   const [adReportOpen, setAdReportOpen] = useState(false);
+  const [hintShopOpen, setHintShopOpen] = useState(false);
+  const [hintBalanceTick, setHintBalanceTick] = useState(0);
   const auth = useSupabaseAuth();
   const authLabel = auth.user?.displayName || auth.user?.email || null;
   const [isAdmin, setIsAdmin] = useState(false);
   const authOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // hintBalanceTick forces re-read after shop purchase / consume.
   const hintOffer = resolveHintOffer(
     Math.max(0, MAX_HINTS_PER_ROUND - hintCount),
   );
+  void hintBalanceTick;
 
   /** Defer so the opening tap does not dismiss the newly opened auth dialog. */
   function openAuthModal() {
@@ -214,6 +219,10 @@ export function Game() {
           setModal(null);
           setAdReportOpen(true);
         }}
+        onHintShop={() => {
+          setModal(null);
+          setHintShopOpen(true);
+        }}
         onAuth={openAuthModal}
         onWordsAdmin={() => setModal("wordsAdmin")}
         showWordsAdmin={isAdmin}
@@ -224,6 +233,11 @@ export function Game() {
         open={adReportOpen}
         onClose={() => setAdReportOpen(false)}
         onSubmitted={() => setToast("شكراً، وصلنا بلاغك")}
+      />
+      <HintShopModal
+        open={hintShopOpen}
+        onClose={() => setHintShopOpen(false)}
+        onBalanceChange={() => setHintBalanceTick((n) => n + 1)}
       />
       <WordsAdminModal
         open={modal === "wordsAdmin"}
@@ -398,14 +412,17 @@ export function Game() {
             );
             if (offer === "free" || offer === "balance") {
               useHint();
+              setHintBalanceTick((n) => n + 1);
               return;
             }
             if (offer !== "ad") return;
             setAdBusy(true);
             try {
               const result = await showRewardedAd("hint");
-              if (result === "rewarded") useHint();
-              else if (result === "dismissed")
+              if (result === "rewarded") {
+                useHint();
+                setHintBalanceTick((n) => n + 1);
+              } else if (result === "dismissed")
                 setToast("شاهِد الإعلان للنهاية لكشف حرف");
               else setToast("الإعلان غير متاح الآن");
             } finally {

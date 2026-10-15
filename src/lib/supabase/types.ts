@@ -268,7 +268,27 @@ export interface Database {
         Relationships: [];
       };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      get_hint_balance: {
+        Args: { p_device_id: string };
+        Returns: number;
+      };
+      spend_hint_balance: {
+        Args: { p_device_id: string };
+        Returns: number;
+      };
+      credit_hint_purchase: {
+        Args: {
+          p_device_id: string;
+          p_transaction_id: string;
+          p_product_id: string;
+          p_store_product_id: string;
+          p_hints: number;
+          p_user_id?: string | null;
+        };
+        Returns: number;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

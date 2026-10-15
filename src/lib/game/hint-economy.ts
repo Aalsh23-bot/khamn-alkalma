@@ -54,6 +54,12 @@ export function consumePurchasedHint(): boolean {
   const bal = loadHintBalance();
   if (bal <= 0) return false;
   saveHintBalance(bal - 1);
+  // Best-effort server decrement (lazy import avoids cycles).
+  void import("@/lib/iap/purchases")
+    .then((m) => m.spendHintOnServer())
+    .catch(() => {
+      /* offline */
+    });
   return true;
 }
 

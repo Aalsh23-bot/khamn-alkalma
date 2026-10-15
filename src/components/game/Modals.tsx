@@ -136,7 +136,9 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
       title: "التلميحات والأوضاع",
       body: (
         <div className="space-y-3 text-[15px] leading-7 text-fg">
-          <p>أول تلميح كل يوم مجاني في كل الأوضاع. بعده تلميح مقابل إعلان مكافأة اختياري.</p>
+          <p>
+            أول تلميح كل يوم مجاني. بعده من رصيدك المشترى، أو مقابل إعلان مكافأة اختياري. الباقات من الإعدادات.
+          </p>
           <p className="text-sm text-muted">
             بعد الخسارة يمكنك مشاهدة إعلان لاستعادة المحاولة، أو في المراحل تجربة كلمة جديدة.
           </p>
@@ -299,6 +301,7 @@ export function SettingsModal({
   onInstall,
   onPrivacy,
   onReportAd,
+  onHintShop,
   onAuth,
   onWordsAdmin,
   authLabel,
@@ -313,6 +316,7 @@ export function SettingsModal({
   onInstall: () => void;
   onPrivacy: () => void;
   onReportAd?: () => void;
+  onHintShop?: () => void;
   onAuth: () => void;
   onWordsAdmin?: () => void;
   authLabel?: string | null;
@@ -358,6 +362,15 @@ export function SettingsModal({
           className="mt-3 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg transition-transform duration-150 active:scale-[0.98]"
         >
           تثبيت على الجوال
+        </button>
+      )}
+      {onHintShop && (
+        <button
+          type="button"
+          onClick={onHintShop}
+          className="mt-3 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg transition-transform duration-150 active:scale-[0.98]"
+        >
+          باقات التلميحات
         </button>
       )}
       {onReportAd && (
