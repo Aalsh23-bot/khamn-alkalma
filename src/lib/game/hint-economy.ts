@@ -50,15 +50,18 @@ export function saveHintBalance(n: number): void {
   }
 }
 
+/**
+ * Optimistic local decrement; server (auth.uid()) is source of truth and
+ * will correct the cache via spendHintOnServer / sync.
+ */
 export function consumePurchasedHint(): boolean {
   const bal = loadHintBalance();
   if (bal <= 0) return false;
-  saveHintBalance(bal - 1);
-  // Best-effort server decrement (lazy import avoids cycles).
+  saveHintBalance(Math.max(0, bal - 1));
   void import("@/lib/iap/purchases")
     .then((m) => m.spendHintOnServer())
     .catch(() => {
-      /* offline */
+      /* offline — cache may be briefly ahead until next sync */
     });
   return true;
 }

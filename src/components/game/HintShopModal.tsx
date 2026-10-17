@@ -5,6 +5,7 @@ import {
   fetchShopPacks,
   isIapSupported,
   purchaseHintPack,
+  restorePurchases,
   type ShopPack,
 } from "@/lib/iap/purchases";
 import type { HintPackId } from "@/lib/iap/config";
@@ -23,6 +24,7 @@ export function HintShopModal({
   const [packs, setPacks] = useState<ShopPack[]>([]);
   const [balance, setBalance] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -31,9 +33,20 @@ export function HintShopModal({
     setMessage(null);
     setBalance(loadHintBalance());
     setLoading(true);
-    void fetchShopPacks()
-      .then(setPacks)
-      .finally(() => setLoading(false));
+    void (async () => {
+      const enabled = await isHintPacksEnabled();
+      if (!enabled) {
+        setPacks([]);
+        setMessage("باقات التلميحات غير متاحة حالياً.");
+        setLoading(false);
+        return;
+      }
+      try {
+        setPacks(await fetchShopPacks());
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [open]);
 
   async function buy(productId: HintPackId) {
@@ -112,8 +125,31 @@ export function HintShopModal({
 
           <button
             type="button"
+            disabled={restoring || Boolean(busyId)}
+            onClick={() => {
+              void (async () => {
+                setRestoring(true);
+                setMessage(null);
+                const result = await restorePurchases();
+                setRestoring(false);
+                if (!result.ok) {
+                  setMessage(result.error);
+                  return;
+                }
+                setBalance(result.balance);
+                onBalanceChange?.(result.balance);
+                setMessage(`تمت مزامنة الرصيد · ${result.balance}`);
+              })();
+            }}
+            className="mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-key text-sm font-medium text-fg disabled:opacity-55"
+          >
+            {restoring ? "جارٍ الاستعادة…" : "استعادة المشتريات"}
+          </button>
+
+          <button
+            type="button"
             onClick={onClose}
-            className="mt-5 flex h-12 w-full items-center justify-center rounded-xl bg-key text-sm font-medium text-fg"
+            className="mt-2 flex h-12 w-full items-center justify-center rounded-xl bg-key text-sm font-medium text-fg"
           >
             إغلاق
           </button>

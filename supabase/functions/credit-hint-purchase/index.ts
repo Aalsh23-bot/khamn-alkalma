@@ -180,22 +180,28 @@ serve(async (req) => {
   }
 
   const admin = createClient(supabaseUrl, serviceKey);
-  const { data, error } = await admin.rpc("credit_hint_purchase", {
-    p_device_id: deviceId.length >= 8 ? deviceId : `user_${user.id}`,
+  const { data, error } = await admin.rpc("credit_hint_purchase_for_user", {
+    p_user_id: user.id,
     p_transaction_id: transactionId,
     p_product_id: productId,
     p_store_product_id: storeProductId,
     p_hints: hints,
-    p_user_id: user.id,
+    p_device_id: deviceId.length >= 8 ? deviceId : null,
   });
 
   if (error) {
-    // Unique violation → already credited; return current balance for this user/device.
+    // Unique violation → already credited; return current balance for this user.
     if (/unique|duplicate|already/i.test(error.message)) {
-      const { data: bal } = await admin.rpc("get_hint_balance", {
-        p_device_id: deviceId.length >= 8 ? deviceId : `user_${user.id}`,
+      const { data: row } = await admin
+        .from("hint_balances")
+        .select("balance")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      return json(200, {
+        ok: true,
+        balance: row?.balance ?? 0,
+        already_credited: true,
       });
-      return json(200, { ok: true, balance: bal ?? 0, already_credited: true });
     }
     return json(500, { error: error.message });
   }

@@ -213,36 +213,82 @@ async function creditPurchaseOnServer(input: {
   }
 }
 
-/** Pull authoritative balance from Supabase into local cache. */
+/** Pull authoritative balance from Supabase (auth.uid()) into local cache. */
 export async function syncHintBalanceFromServer(): Promise<number | null> {
   const sb = getSupabase();
   if (!sb) return null;
   try {
-    const { data, error } = await sb.rpc("get_hint_balance", {
-      p_device_id: getAnonymousDeviceId(),
-    });
+    const {
+      data: { session },
+    } = await sb.auth.getSession();
+    if (!session?.user) {
+      saveHintBalance(0);
+      return 0;
+    }
+    const { data, error } = await sb.rpc("get_hint_balance");
     if (error) return null;
     const n = typeof data === "number" ? data : Number(data);
     if (!Number.isFinite(n)) return null;
-    saveHintBalance(n);
-    return n;
+    const bal = Math.max(0, Math.floor(n));
+    saveHintBalance(bal);
+    return bal;
   } catch {
     return null;
   }
 }
 
-/** Decrement one purchased hint on the server (best-effort) after local consume. */
-export async function spendHintOnServer(): Promise<void> {
+/** Decrement one purchased hint on the server for auth.uid(); syncs local cache. */
+export async function spendHintOnServer(): Promise<number | null> {
   const sb = getSupabase();
-  if (!sb) return;
+  if (!sb) return null;
   try {
-    const { data, error } = await sb.rpc("spend_hint_balance", {
-      p_device_id: getAnonymousDeviceId(),
-    });
-    if (error) return;
+    const { data, error } = await sb.rpc("spend_hint_balance");
+    if (error) return null;
     const n = typeof data === "number" ? data : Number(data);
-    if (Number.isFinite(n)) saveHintBalance(n);
+    if (!Number.isFinite(n)) return null;
+    const bal = Math.max(0, Math.floor(n));
+    saveHintBalance(bal);
+    return bal;
   } catch {
-    /* keep local */
+    return null;
+  }
+}
+
+/**
+ * Restore / sync purchases: refresh RevenueCat customer info then re-sync
+ * server balance (consumables are credited at purchase time via ledger).
+ */
+export async function restorePurchases(): Promise<
+  { ok: true; balance: number } | { ok: false; error: string }
+> {
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: "الخدمة غير متاحة" };
+  const {
+    data: { session },
+  } = await sb.auth.getSession();
+  if (!session?.user?.id) {
+    return { ok: false, error: "سجّل الدخول لاستعادة المشتريات" };
+  }
+  try {
+    if (Capacitor.isNativePlatform()) {
+      const ready = await initPurchases(session.user.id);
+      if (ready) {
+        const { Purchases } = await import("@revenuecat/purchases-capacitor");
+        try {
+          await Purchases.logIn({ appUserID: session.user.id });
+        } catch {
+          /* ignore */
+        }
+        await Purchases.restorePurchases();
+      }
+    }
+    const bal = await syncHintBalanceFromServer();
+    if (bal == null) return { ok: false, error: "تعذّر مزامنة الرصيد من الخادم" };
+    return { ok: true, balance: bal };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "تعذّرت استعادة المشتريات",
+    };
   }
 }
