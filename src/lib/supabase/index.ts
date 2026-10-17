@@ -16,6 +16,7 @@ export type {
 export {
   getSession,
   ensureAuthSession,
+  isRegisteredUser,
   signInWithAppleNative,
   signInWithEmail,
   signOut,

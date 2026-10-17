@@ -30,13 +30,9 @@ import { showRewardedAd } from "@/lib/ads/ads";
 import { fetchIsAppAdmin } from "@/lib/supabase/api";
 import { useSupabaseAuth } from "@/lib/supabase/use-auth";
 import { RewardedAdOverlay } from "./RewardedAdOverlay";
-import {
-  MAX_HINTS_PER_ROUND,
-} from "@/lib/game/store";
-import { resolveHintOffer } from "@/lib/game/hint-economy";
+import { loadHintBalance } from "@/lib/game/hint-economy";
 import { AdReportModal } from "./AdReportModal";
 import { HintShopModal } from "./HintShopModal";
-import { isHintPacksEnabled } from "@/lib/iap/feature-flags";
 
 export function Game() {
   const hydrated = useGame((s) => s.hydrated);
@@ -95,17 +91,17 @@ export function Game() {
   const [adBusy, setAdBusy] = useState(false);
   const [adReportOpen, setAdReportOpen] = useState(false);
   const [hintShopOpen, setHintShopOpen] = useState(false);
-  const [hintPacksEnabled, setHintPacksEnabled] = useState(false);
   const [hintBalanceTick, setHintBalanceTick] = useState(0);
   const auth = useSupabaseAuth();
-  const authLabel = auth.user?.displayName || auth.user?.email || null;
+  const authLabel =
+    auth.user && !auth.user.isAnonymous
+      ? auth.user.displayName || auth.user.email || null
+      : null;
   const [isAdmin, setIsAdmin] = useState(false);
   const authOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // hintBalanceTick forces re-read after shop purchase / consume.
-  const hintOffer = resolveHintOffer(
-    Math.max(0, MAX_HINTS_PER_ROUND - hintCount),
-  );
   void hintBalanceTick;
+  const hintBalance = loadHintBalance();
 
   /** Defer so the opening tap does not dismiss the newly opened auth dialog. */
   function openAuthModal() {
@@ -144,16 +140,6 @@ export function Game() {
   useEffect(() => {
     hydrate();
   }, [hydrate]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void isHintPacksEnabled().then((on) => {
-      if (!cancelled) setHintPacksEnabled(on);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -231,14 +217,10 @@ export function Game() {
           setModal(null);
           setAdReportOpen(true);
         }}
-        onHintShop={
-          hintPacksEnabled
-            ? () => {
-                setModal(null);
-                setHintShopOpen(true);
-              }
-            : undefined
-        }
+        onHintShop={() => {
+          setModal(null);
+          setHintShopOpen(true);
+        }}
         onAuth={openAuthModal}
         onWordsAdmin={() => setModal("wordsAdmin")}
         showWordsAdmin={isAdmin}
@@ -254,6 +236,7 @@ export function Game() {
         open={hintShopOpen}
         onClose={() => setHintShopOpen(false)}
         onBalanceChange={() => setHintBalanceTick((n) => n + 1)}
+        onRequestAuth={openAuthModal}
       />
       <WordsAdminModal
         open={modal === "wordsAdmin"}
@@ -420,35 +403,37 @@ export function Game() {
             ? () => setModal("challengeInvite")
             : undefined
         }
-        onHint={() => {
+        onHintAd={() => {
           void (async () => {
             if (adBusy || hintUsed || hintAwaitingGuess || inputLocked) return;
-            const offer = resolveHintOffer(
-              Math.max(0, MAX_HINTS_PER_ROUND - hintCount),
-            );
-            if (offer === "free" || offer === "balance") {
-              useHint();
-              setHintBalanceTick((n) => n + 1);
-              return;
-            }
-            if (offer !== "ad") return;
             setAdBusy(true);
             try {
               const result = await showRewardedAd("hint");
               if (result === "rewarded") {
-                useHint();
+                useHint("ad");
                 setHintBalanceTick((n) => n + 1);
-              } else if (result === "dismissed")
+              } else if (result === "dismissed") {
                 setToast("شاهِد الإعلان للنهاية لكشف حرف");
-              else setToast("الإعلان غير متاح الآن");
+              } else {
+                setToast("الإعلان غير متوفر");
+              }
             } finally {
               setAdBusy(false);
             }
           })();
         }}
+        onHintBalance={() => {
+          if (hintUsed || hintAwaitingGuess || inputLocked) return;
+          if (loadHintBalance() > 0) {
+            useHint("balance");
+            setHintBalanceTick((n) => n + 1);
+            return;
+          }
+          setHintShopOpen(true);
+        }}
         hintUsed={hintUsed}
         hintAwaitingGuess={hintAwaitingGuess}
-        hintOffer={hintOffer}
+        hintBalance={hintBalance}
         hintDisabled={inputLocked || hintUsed || hintAwaitingGuess || adBusy}
       />
 

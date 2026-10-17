@@ -1,7 +1,5 @@
-import { localDateKey } from "./daily";
 import { durableSetItem } from "./durable-storage";
 
-const FREE_HINT_KEY = "khamsa_free_hint_date_v1";
 const HINT_BALANCE_KEY = "khamsa_hint_balance_v1";
 
 function readLocal(key: string): string | null {
@@ -13,26 +11,7 @@ function readLocal(key: string): string | null {
   }
 }
 
-/** Date key (local) when the free daily hint was last consumed. */
-export function loadFreeHintUsedDate(): string | null {
-  return readLocal(FREE_HINT_KEY);
-}
-
-export function isFreeHintAvailable(dateKey = localDateKey()): boolean {
-  return loadFreeHintUsedDate() !== dateKey;
-}
-
-export function consumeFreeHint(dateKey = localDateKey()): void {
-  try {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(FREE_HINT_KEY, dateKey);
-    durableSetItem(FREE_HINT_KEY, dateKey);
-  } catch {
-    /* storage blocked */
-  }
-}
-
-/** Purchased hint balance (phase 2). Defaults to 0 until IAP ships. */
+/** Purchased / claimed hint balance cache. Server (auth.uid()) is source of truth. */
 export function loadHintBalance(): number {
   const raw = readLocal(HINT_BALANCE_KEY);
   const n = raw ? Number(raw) : 0;
@@ -66,31 +45,38 @@ export function consumePurchasedHint(): boolean {
   return true;
 }
 
-export type HintOfferKind = "free" | "balance" | "ad" | "exhausted";
+/** @deprecated Free daily hint is claimed in the shop (Kuwait midnight), not mid-round. */
+export type HintOfferKind = "balance" | "ad" | "exhausted";
 
 /**
- * Priority: free daily → purchased balance → rewarded ad.
- * `roundHintsLeft` is how many hints remain in this round (max 2).
+ * In-round offer for spending a hint from balance (ads are a separate button).
  */
-export function resolveHintOffer(
-  roundHintsLeft: number,
-  dateKey = localDateKey(),
-): HintOfferKind {
+export function resolveHintOffer(roundHintsLeft: number): HintOfferKind {
   if (roundHintsLeft <= 0) return "exhausted";
-  if (isFreeHintAvailable(dateKey)) return "free";
   if (loadHintBalance() > 0) return "balance";
   return "ad";
 }
 
-export function hintOfferLabel(kind: HintOfferKind, balance = loadHintBalance()): string {
+export function hintOfferLabel(
+  kind: HintOfferKind,
+  balance = loadHintBalance(),
+): string {
   switch (kind) {
-    case "free":
-      return "💡 تلميح مجاني";
     case "balance":
-      return `💡 تلميح (${balance})`;
+      return `تلميحاتك (${balance})`;
     case "ad":
-      return "▶️ تلميح مقابل إعلان";
+      return "تلميح بإعلان";
     case "exhausted":
       return "استُخدم التلميحان";
   }
+}
+
+/** Format ms until next Kuwait midnight for the free-hint countdown. */
+export function formatCountdown(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "00:00:00";
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
 }

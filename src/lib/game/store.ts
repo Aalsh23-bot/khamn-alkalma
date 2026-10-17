@@ -44,11 +44,7 @@ import {
   freshStage,
   roundFromSave,
 } from "./store-rounds";
-import {
-  consumeFreeHint,
-  consumePurchasedHint,
-  resolveHintOffer,
-} from "./hint-economy";
+import { consumePurchasedHint } from "./hint-economy";
 import { trackEvent } from "@/lib/analytics";
 import { unlockAchievements } from "./store-achievements";
 import {
@@ -602,7 +598,7 @@ export const useGame = create<GameStore>((set, get) => ({
     }
   },
 
-  useHint: () => {
+  useHint: (source: "balance" | "ad" = "balance") => {
     const s = get();
     if (
       !s.hydrated ||
@@ -622,8 +618,11 @@ export const useGame = create<GameStore>((set, get) => ({
         return;
       }
     }
-    const offer = resolveHintOffer(MAX_HINTS_PER_ROUND - s.hintCount, localDateKey());
-    if (offer === "exhausted") return;
+    // Round hints come from balance or rewarded ad (caller chooses). Free daily
+    // hint is claimed in the shop and added to balance (Kuwait midnight).
+    if (source === "balance") {
+      if (!consumePurchasedHint()) return;
+    }
 
     const known = new Set<number>();
     for (let g = 0; g < s.guesses.length; g++) {
@@ -639,10 +638,6 @@ export const useGame = create<GameStore>((set, get) => ({
       set({ toast: "كل الحروف مكشوفة" });
       return;
     }
-    if (offer === "free") consumeFreeHint(localDateKey());
-    else if (offer === "balance") {
-      if (!consumePurchasedHint()) return;
-    }
     const col = unknown[0]!;
     const hintCount = s.hintCount + 1;
     set({
@@ -653,7 +648,7 @@ export const useGame = create<GameStore>((set, get) => ({
       toast: `🎉 حصلت على تلميح · الحرف في الموضع ${col + 1} هو «${s.answer[col]}»`,
     });
     trackEvent("hint_used", {
-      kind: offer,
+      kind: source,
       mode: s.mode,
       stage: s.mode === "stages" ? s.stageLevel : null,
     });

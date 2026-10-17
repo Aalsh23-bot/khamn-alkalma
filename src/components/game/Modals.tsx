@@ -137,7 +137,7 @@ export function HelpModal({ open, onClose }: { open: boolean; onClose: () => voi
       body: (
         <div className="space-y-3 text-[15px] leading-7 text-fg">
           <p>
-            أول تلميح كل يوم مجاني. بعده من رصيدك المشترى، أو مقابل إعلان مكافأة اختياري. الباقات من الإعدادات.
+            زرّان للتلميح: بإعلان، أو من رصيدك. التلميح المجاني اليومي من المتجر (١٢ ليلاً بتوقيت الكويت).
           </p>
           <p className="text-sm text-muted">
             بعد الخسارة يمكنك مشاهدة إعلان لاستعادة المحاولة، أو في المراحل تجربة كلمة جديدة.
@@ -370,7 +370,7 @@ export function SettingsModal({
           onClick={onHintShop}
           className="mt-3 flex h-12 w-full items-center justify-center rounded-xl bg-accent text-sm font-semibold text-accent-fg transition-transform duration-150 active:scale-[0.98]"
         >
-          باقات التلميحات
+          متجر التلميحات
         </button>
       )}
       {onReportAd && (

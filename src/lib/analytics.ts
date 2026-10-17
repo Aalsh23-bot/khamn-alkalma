@@ -153,18 +153,26 @@ export async function submitAdReport(input: {
       p_platform: row.platform,
     });
     if (error) return { ok: false, error: error.message };
-    const payload = data as { ok?: boolean; error?: string } | null;
+    const payload = data as { ok?: boolean; error?: string; id?: string } | null;
     if (!payload?.ok) {
       if (payload?.error === "rate_limited") {
         return { ok: false, error: "وصلت للحد الأقصى من البلاغات لهذا الساعة (5)" };
       }
+      if (payload?.error === "not_authenticated") {
+        return { ok: false, error: "سجّل الدخول لإرسال بلاغ" };
+      }
       return { ok: false, error: payload?.error || "تعذّر إرسال البلاغ" };
     }
     trackEvent("ad_report", { reason: row.reason });
-    try {
-      await sb.functions.invoke("ad-report-notify", { body: row });
-    } catch {
-      /* email optional */
+    // Email only for a persisted report id (server re-checks the row).
+    if (payload.id) {
+      try {
+        await sb.functions.invoke("ad-report-notify", {
+          body: { report_id: payload.id },
+        });
+      } catch {
+        /* email optional — row is already saved */
+      }
     }
     return { ok: true };
   } catch (e) {

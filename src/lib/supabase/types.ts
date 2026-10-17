@@ -458,6 +458,18 @@ export interface Database {
         };
         Returns: unknown;
       };
+      get_free_hint_status: {
+        Args: Record<string, never>;
+        Returns: unknown;
+      };
+      claim_free_daily_hint: {
+        Args: Record<string, never>;
+        Returns: unknown;
+      };
+      mark_ad_report_emailed: {
+        Args: { p_report_id: string };
+        Returns: boolean;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

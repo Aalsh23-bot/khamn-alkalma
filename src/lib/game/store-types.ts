@@ -74,7 +74,7 @@ export interface GameStore {
   backspace: () => void;
   submit: () => void;
   finishReveal: () => void;
-  useHint: () => void;
+  useHint: (source?: "balance" | "ad") => void;
   setToast: (msg: string | null) => void;
   setModal: (modal: GameStore["modal"]) => void;
   dismissBadge: () => void;

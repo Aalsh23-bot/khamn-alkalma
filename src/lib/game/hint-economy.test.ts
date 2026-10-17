@@ -1,8 +1,8 @@
 import { describe, it, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import {
-  consumeFreeHint,
-  isFreeHintAvailable,
+  formatCountdown,
+  loadHintBalance,
   resolveHintOffer,
   saveHintBalance,
 } from "./hint-economy.ts";
@@ -25,24 +25,23 @@ beforeEach(() => {
 });
 
 describe("hint economy", () => {
-  it("offers free hint first", () => {
-    assert.equal(resolveHintOffer(2, "2026-10-15"), "free");
-  });
-
-  it("falls back to ad after free is used", () => {
-    consumeFreeHint("2026-10-15");
-    assert.equal(isFreeHintAvailable("2026-10-15"), false);
-    assert.equal(resolveHintOffer(2, "2026-10-15"), "ad");
+  it("uses ad when balance is empty", () => {
+    assert.equal(resolveHintOffer(2), "ad");
   });
 
   it("prefers balance over ad", () => {
-    consumeFreeHint("2026-10-15");
     saveHintBalance(3);
-    assert.equal(resolveHintOffer(1, "2026-10-15"), "balance");
+    assert.equal(resolveHintOffer(1), "balance");
+    assert.equal(loadHintBalance(), 3);
   });
 
-  it("resets free availability on a new day", () => {
-    consumeFreeHint("2026-10-15");
-    assert.equal(isFreeHintAvailable("2026-10-16"), true);
+  it("is exhausted when no round hints left", () => {
+    saveHintBalance(5);
+    assert.equal(resolveHintOffer(0), "exhausted");
+  });
+
+  it("formats countdown", () => {
+    assert.equal(formatCountdown(3661000), "01:01:01");
+    assert.equal(formatCountdown(0), "00:00:00");
   });
 });

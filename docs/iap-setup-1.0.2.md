@@ -25,6 +25,7 @@
 6. Webhook → `https://<project>.supabase.co/functions/v1/revenuecat-webhook`
    - Authorization = قيمة سر **`REVENUECAT_WEBHOOK_SECRET`**
    - فعّل حدث `NON_RENEWING_PURCHASE`
+   - JWT verification معطّل لهذه الدالة (`verify_jwt = false` في `supabase/config.toml`)
 
 ## 3) Supabase
 1. Auth → فعّل **Anonymous Sign-Ins** (الشراء يعمل بدون تسجيل إجباري عبر جلسة مجهولة؛ `auth.uid()` يبقى موجوداً)
@@ -34,23 +35,29 @@
    3. `20261017120000_app_config_hint_packs_flag.sql`
    4. `20261017130000_hint_balance_user_scoped.sql`
    5. `20261017140000_ad_report_rate_limit.sql`
-   6. `20261017150000_secure_hint_credit_and_ad_reports.sql`  
-      (يسحب `credit_hint_purchase` من العملاء، يقفل `for_user` على service_role، يصلح upsert على `user_id`، يحذف insert المباشر على `ad_reports`)
+   6. `20261017150000_secure_hint_credit_and_ad_reports.sql`
+   7. `20261017160000_free_hint_and_ad_report_uid.sql`  
+      (تلميح مجاني بتوقيت الكويت، حد بلاغات الإعلانات على `auth.uid()`)
 3. أسرار Edge:
    - `REVENUECAT_SECRET_KEY`
    - `REVENUECAT_WEBHOOK_SECRET`
-   - `RESEND_API_KEY` (+ اختياري `AD_REPORT_DEVICE_HMAC`)
-4. انشر Functions:
-   - `ad-report-notify`
-   - `credit-hint-purchase`
-   - `revenuecat-webhook`
+   - `RESEND_API_KEY`
+4. انشر Functions (من جذر المشروع):
+   ```bash
+   supabase functions deploy credit-hint-purchase
+   supabase functions deploy ad-report-notify
+   supabase functions deploy merge-anonymous-hints
+   # Webhook must skip Supabase JWT verification — RevenueCat sends its own secret:
+   supabase functions deploy revenuecat-webhook --no-verify-jwt
+   ```
+   أو اعتمد على `supabase/config.toml` حيث `[functions.revenuecat-webhook] verify_jwt = false`.
 5. اترك `app_config.hint_packs_enabled = false` إلى أن تكون المنتجات جاهزة، ثم:
    ```sql
    update public.app_config
    set value = 'true'::jsonb
    where key = 'hint_packs_enabled';
    ```
-   مع العلم: العميل **لا يشغّل RevenueCat** أصلاً إذا كانت القيمة `false`.
+   مع العلم: العميل **لا يشغّل RevenueCat** أصلاً إذا كانت القيمة `false`. المتجر يبقى يفتح لزر التلميح المجاني حتى مع إخفاء الباقات.
 
 ## 4) البناء
 ```bash
@@ -60,5 +67,7 @@ npm run native:sync
 ```
 ثم Archive لـ **1.0.2** من Xcode وأرسل مع المنتجات.
 
+جلسة المصادقة تُحفظ في **Keychain** (via `capacitor-secure-storage-plugin`) حتى تبقى بعد إعادة التثبيت قدر الإمكان. ترقية المجهول → Apple/إيميل تربط نفس الرصيد (`updateUser` / `merge-anonymous-hints`).
+
 ## اختبار القبول
-Sandbox Apple ID على جهاز حقيقي → اشترِ باقة (بدون تسجيل دخول إجباري) → الرصيد يزيد مرة وحدة → أعد التثبيت / جهاز ثاني → **استعادة المشتريات** أو Webhook يضيف أي عملية ناقصة → نفس `transaction_id` لا يُحسب مرتين.
+Sandbox Apple ID على جهاز حقيقي → اشترِ باقة (بدون تسجيل دخول إجباري) → الرصيد يزيد مرة وحدة → أعد التثبيت / جهاز ثاني → **استعادة المشتريات** أو Webhook يضيف أي عملية ناقصة → نفس `transaction_id` من RevenueCat لا يُحسب مرتين. التلميح المجاني يتجدد الساعة ١٢ ليلاً بتوقيت الكويت.

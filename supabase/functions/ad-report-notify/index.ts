@@ -1,8 +1,8 @@
 /**
- * Email each accepted ad report. Prefer calling only after submit_ad_report RPC succeeds.
- * Requires: RESEND_API_KEY
- * Requires auth: valid user JWT OR X-Device-Signature (HMAC of device_id with AD_REPORT_DEVICE_HMAC).
- * Unsigned requests are always rejected.
+ * Email an ad report ONLY if it was persisted in ad_reports and not yet emailed.
+ * Body: { report_id: uuid }
+ * Auth: user JWT whose uid owns the report (or service role).
+ * Requires: RESEND_API_KEY, SUPABASE_SERVICE_ROLE_KEY
  */
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
@@ -10,26 +10,26 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 const TO = Deno.env.get("AD_REPORT_TO") ?? "a.alshammri00@gmail.com";
 const FROM = Deno.env.get("AD_REPORT_FROM") ?? "Khamsa Reports <onboarding@resend.dev>";
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function cors(res: Response) {
   const headers = new Headers(res.headers);
   headers.set("Access-Control-Allow-Origin", "*");
   headers.set(
     "Access-Control-Allow-Headers",
-    "authorization, x-client-info, apikey, content-type, x-device-signature",
+    "authorization, x-client-info, apikey, content-type",
   );
   return new Response(res.body, { status: res.status, headers });
 }
 
-async function hmacHex(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
+function json(status: number, body: Record<string, unknown>) {
+  return cors(
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    }),
   );
-  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
-  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 serve(async (req) => {
@@ -37,91 +37,88 @@ serve(async (req) => {
     return cors(new Response(null, { status: 204 }));
   }
   if (req.method !== "POST") {
-    return cors(new Response("Method not allowed", { status: 405 }));
+    return json(405, { error: "method" });
   }
 
   const apiKey = Deno.env.get("RESEND_API_KEY");
-  if (!apiKey) {
-    return cors(
-      new Response(JSON.stringify({ ok: false, error: "RESEND_API_KEY missing" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  if (!apiKey) return json(500, { error: "RESEND_API_KEY missing" });
+  if (!supabaseUrl || !serviceKey) return json(500, { error: "server_misconfigured" });
+
+  const authHeader = req.headers.get("Authorization") ?? "";
+  if (!authHeader.toLowerCase().startsWith("bearer ")) {
+    return json(401, { error: "auth_required" });
   }
 
-  let body: {
-    device_id?: string;
-    reason?: string;
-    note?: string | null;
-    app_version?: string | null;
-    platform?: string | null;
-  };
+  let body: { report_id?: string };
   try {
     body = await req.json();
   } catch {
-    return cors(
-      new Response(JSON.stringify({ ok: false, error: "invalid json" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
+    return json(400, { error: "invalid_json" });
   }
 
-  const deviceId = (body.device_id ?? "").trim();
-  if (deviceId.length < 8) {
-    return cors(
-      new Response(JSON.stringify({ ok: false, error: "invalid_device" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
+  const reportId = (body.report_id ?? "").trim();
+  if (!UUID_RE.test(reportId)) {
+    return json(400, { error: "invalid_report_id" });
   }
 
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const hasBearer = authHeader.toLowerCase().startsWith("bearer ");
-  const deviceHmacSecret = Deno.env.get("AD_REPORT_DEVICE_HMAC") ?? "";
-  const providedSig = (req.headers.get("X-Device-Signature") ?? "").trim();
-
-  let authorized = false;
-
-  // Prefer HMAC device signature when provided.
-  if (deviceHmacSecret && providedSig) {
-    const expected = await hmacHex(deviceHmacSecret, deviceId);
-    if (providedSig === expected) authorized = true;
+  // Resolve caller (user JWT). Service-role bearer is also accepted for triggers.
+  const token = authHeader.slice(7).trim();
+  const isService = token === serviceKey;
+  let callerId: string | null = null;
+  if (!isService) {
+    const userClient = createClient(supabaseUrl, anonKey || serviceKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data } = await userClient.auth.getUser();
+    callerId = data.user?.id ?? null;
+    if (!callerId) return json(401, { error: "invalid_user" });
   }
 
-  // Or a valid Supabase user JWT (anonymous included).
-  if (!authorized && hasBearer) {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-    if (supabaseUrl && anonKey) {
-      const userClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data } = await userClient.auth.getUser();
-      if (data.user?.id) authorized = true;
+  const admin = createClient(supabaseUrl, serviceKey);
+  const { data: row, error: loadErr } = await admin
+    .from("ad_reports")
+    .select("id, device_id, reason, note, app_version, platform, user_id, email_sent_at, created_at")
+    .eq("id", reportId)
+    .maybeSingle();
+
+  if (loadErr) return json(500, { error: loadErr.message });
+  if (!row) return json(404, { error: "report_not_found" });
+
+  if (!isService && row.user_id && callerId && row.user_id !== callerId) {
+    return json(403, { error: "forbidden" });
+  }
+
+  if (row.email_sent_at) {
+    return json(200, { ok: true, already_sent: true });
+  }
+
+  // Per-user email throttle: max 5 emails/hour (mirrors insert limit).
+  if (row.user_id) {
+    const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count } = await admin
+      .from("ad_reports")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", row.user_id)
+      .not("email_sent_at", "is", null)
+      .gte("email_sent_at", since);
+    if ((count ?? 0) >= 5) {
+      return json(429, { error: "email_rate_limited", limit: 5 });
     }
   }
 
-  // No signature and no valid JWT → reject (never soft-allow).
-  if (!authorized) {
-    return cors(
-      new Response(JSON.stringify({ ok: false, error: "signature_required" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-  }
-
-  const subject = `[خمن الكلمة] بلاغ إعلان: ${body.reason ?? "غير محدد"}`;
+  const subject = `[خمن الكلمة] بلاغ إعلان: ${row.reason ?? "غير محدد"}`;
   const text = [
-    `سبب البلاغ: ${body.reason ?? ""}`,
-    `ملاحظة: ${body.note ?? "—"}`,
-    `الجهاز: ${deviceId}`,
-    `النسخة: ${body.app_version ?? ""}`,
-    `المنصة: ${body.platform ?? ""}`,
-    `الوقت: ${new Date().toISOString()}`,
+    `سبب البلاغ: ${row.reason ?? ""}`,
+    `ملاحظة: ${row.note ?? "—"}`,
+    `الجهاز: ${row.device_id ?? ""}`,
+    `المستخدم: ${row.user_id ?? ""}`,
+    `النسخة: ${row.app_version ?? ""}`,
+    `المنصة: ${row.platform ?? ""}`,
+    `الوقت: ${row.created_at ?? new Date().toISOString()}`,
+    `report_id: ${row.id}`,
   ].join("\n");
 
   const res = await fetch("https://api.resend.com/emails", {
@@ -140,17 +137,9 @@ serve(async (req) => {
 
   if (!res.ok) {
     const errText = await res.text();
-    return cors(
-      new Response(JSON.stringify({ ok: false, error: errText }), {
-        status: 502,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
+    return json(502, { error: errText });
   }
 
-  return cors(
-    new Response(JSON.stringify({ ok: true }), {
-      headers: { "Content-Type": "application/json" },
-    }),
-  );
+  await admin.rpc("mark_ad_report_emailed", { p_report_id: reportId });
+  return json(200, { ok: true });
 });

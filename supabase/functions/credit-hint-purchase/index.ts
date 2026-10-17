@@ -128,21 +128,45 @@ async function findVerifiedPurchase(opts: {
     for (const [rawProduct, list] of Object.entries(nons)) {
       const productId = normalizePackId(rawProduct);
       if (!productId || !Array.isArray(list)) continue;
-      if (list.some((e) => transactionMatches(e, opts.transactionId))) {
-        return {
-          productId,
-          storeProductId: rawProduct,
-          transactionId: opts.transactionId,
-          hints: PACKS[productId],
-        };
-      }
+      const matched = list.find((e) => transactionMatches(e, opts.transactionId));
+      if (!matched) continue;
+      // Always persist the canonical store transaction id from RevenueCat
+      // (same id used by restore/webhook) — never the client-supplied string.
+      const canonical = entryTransactionId(matched);
+      if (!canonical) continue;
+      return {
+        productId,
+        storeProductId: rawProduct,
+        transactionId: canonical,
+        hints: PACKS[productId],
+      };
     }
   }
   return null;
 }
 
+/** Minimal service-role client surface (avoids Deno createClient generic noise). */
+type AdminClient = {
+  from: (
+    table: string,
+  ) => {
+    select: (cols: string) => {
+      eq: (
+        col: string,
+        val: string,
+      ) => {
+        maybeSingle: () => Promise<{ data: { balance?: number; transaction_id?: string } | null }>;
+      };
+    };
+  };
+  rpc: (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
+};
+
 async function creditForUser(
-  admin: ReturnType<typeof createClient>,
+  admin: AdminClient,
   opts: {
     userId: string;
     transactionId: string;
@@ -266,7 +290,7 @@ serve(async (req) => {
     return json(403, { error: "app_user_mismatch" });
   }
 
-  const admin = createClient(supabaseUrl, serviceKey);
+  const admin = createClient(supabaseUrl, serviceKey) as unknown as AdminClient;
 
   // Restore / sync path: credit every verified pack purchase missing from ledger.
   if (body.sync === true) {

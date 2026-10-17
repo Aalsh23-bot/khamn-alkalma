@@ -1,0 +1,21 @@
+# Supabase local / deploy config for Edge Functions.
+# See docs/iap-setup-1.0.2.md for publish flags.
+
+[functions.credit-hint-purchase]
+verify_jwt = true
+
+[functions.ad-report-notify]
+verify_jwt = true
+
+# RevenueCat calls this with its own Authorization secret (not a Supabase JWT).
+[functions.revenuecat-webhook]
+verify_jwt = false
+
+[functions.account-lifecycle]
+verify_jwt = true
+
+[functions.game-api]
+verify_jwt = true
+
+[functions.merge-anonymous-hints]
+verify_jwt = true
