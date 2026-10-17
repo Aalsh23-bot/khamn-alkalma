@@ -8,6 +8,8 @@
 import type { SupportedStorage } from "@supabase/supabase-js";
 
 const PREFIX = "sb-auth:";
+/** Legacy 1.0.1 supabase-js session key (project ref in URL). */
+const LEGACY_AUTH_TOKEN_KEY = "sb-eqxaivexuowngyigmqwl-auth-token";
 
 type SecurePlugin = {
   set: (opts: { key: string; value: string }) => Promise<void>;
@@ -88,6 +90,21 @@ function legacyLocalValues(storageKey: string): string | null {
   return null;
 }
 
+function clearLegacyLocalAuthKeys(): void {
+  lsRemove(LEGACY_AUTH_TOKEN_KEY);
+  if (typeof localStorage === "undefined") return;
+  try {
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && /^sb-[a-z0-9]+-auth-token$/i.test(k)) toRemove.push(k);
+    }
+    for (const k of toRemove) lsRemove(k);
+  } catch {
+    /* ignore */
+  }
+}
+
 async function migrateToKeychain(
   storageKey: string,
   value: string,
@@ -99,6 +116,8 @@ async function migrateToKeychain(
   try {
     await secure.set({ key: full, value });
     lsSet(full, value);
+    // Drop 1.0.1 localStorage session so logout/delete cannot resurrect it.
+    clearLegacyLocalAuthKeys();
   } catch (err) {
     console.warn("[khamsa] Keychain migrate failed", err);
   }
@@ -145,6 +164,7 @@ export const secureAuthStorage: SupportedStorage = {
     const full = PREFIX + key;
     lsRemove(full);
     lsRemove(key);
+    clearLegacyLocalAuthKeys();
     const secure = await getSecurePlugin();
     if (secure) {
       try {
