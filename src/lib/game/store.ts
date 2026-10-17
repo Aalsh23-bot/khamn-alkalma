@@ -149,6 +149,7 @@ export const useGame = create<GameStore>((set, get) => ({
     trackEvent("app_open", {});
     void import("@/lib/iap/purchases")
       .then(async (m) => {
+        // initPurchases no-ops when hint_packs_enabled is false.
         await m.initPurchases();
         await m.syncHintBalanceFromServer();
       })

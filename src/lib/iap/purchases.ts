@@ -1,6 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { getAnonymousDeviceId, trackEvent } from "@/lib/analytics";
 import { getSupabase } from "@/lib/supabase/client";
+import { ensureAuthSession } from "@/lib/supabase/auth";
 import { saveHintBalance, loadHintBalance } from "@/lib/game/hint-economy";
 import {
   HINT_PACKS,
@@ -8,6 +9,7 @@ import {
   revenueCatApiKey,
   type HintPackId,
 } from "./config";
+import { isHintPacksEnabled } from "./feature-flags";
 
 let configured = false;
 let initPromise: Promise<boolean> | null = null;
@@ -27,6 +29,9 @@ export function isIapSupported(): boolean {
 
 export async function initPurchases(appUserId?: string | null): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) return false;
+  // Do not configure RevenueCat while packs are server-disabled.
+  const packsOn = await isHintPacksEnabled();
+  if (!packsOn) return false;
   if (configured) return true;
   if (initPromise) return initPromise;
 
@@ -100,16 +105,24 @@ export async function purchaseHintPack(productId: HintPackId): Promise<PurchaseR
   if (!Capacitor.isNativePlatform()) {
     return { ok: false, error: "المشتريات متاحة داخل التطبيق فقط" };
   }
+  if (!(await isHintPacksEnabled())) {
+    return { ok: false, error: "باقات التلميحات غير متاحة حالياً" };
+  }
   const sb = getSupabase();
   if (!sb) return { ok: false, error: "الخدمة غير متاحة" };
-  const {
-    data: { session },
-  } = await sb.auth.getSession();
-  if (!session?.user?.id) {
-    return { ok: false, error: "سجّل الدخول أولاً لشراء باقات التلميحات" };
-  }
 
-  const ready = await initPurchases(session.user.id);
+  let session;
+  try {
+    session = await ensureAuthSession();
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "تعذّر تجهيز جلسة الشراء",
+    };
+  }
+  const userId = session.user.id;
+
+  const ready = await initPurchases(userId);
   if (!ready) {
     return {
       ok: false,
@@ -119,9 +132,9 @@ export async function purchaseHintPack(productId: HintPackId): Promise<PurchaseR
 
   try {
     const { Purchases } = await import("@revenuecat/purchases-capacitor");
-    // Bind the StoreKit purchase to the authenticated Supabase user.
+    // Bind the StoreKit purchase to the Supabase user (anonymous or signed-in).
     try {
-      await Purchases.logIn({ appUserID: session.user.id });
+      await Purchases.logIn({ appUserID: userId });
     } catch {
       /* already configured with this id */
     }
@@ -146,11 +159,10 @@ export async function purchaseHintPack(productId: HintPackId): Promise<PurchaseR
       return { ok: false, error: "لم يُرجع المتجر معرّف معاملة صالحاً" };
     }
 
+    // Server derives product + hints from RevenueCat — client product_id is not trusted.
     const credited = await creditPurchaseOnServer({
-      productId,
       transactionId,
-      storeProductId: pkg.product.identifier,
-      appUserId: session.user.id,
+      appUserId: userId,
     });
 
     trackEvent("purchase", {
@@ -181,9 +193,7 @@ export async function purchaseHintPack(productId: HintPackId): Promise<PurchaseR
 }
 
 async function creditPurchaseOnServer(input: {
-  productId: string;
   transactionId: string;
-  storeProductId: string;
   appUserId: string;
 }): Promise<{ ok: true; balance: number } | { ok: false; error: string }> {
   const sb = getSupabase();
@@ -191,8 +201,6 @@ async function creditPurchaseOnServer(input: {
   try {
     const { data, error } = await sb.functions.invoke("credit-hint-purchase", {
       body: {
-        product_id: input.productId,
-        store_product_id: input.storeProductId,
         transaction_id: input.transactionId,
         device_id: getAnonymousDeviceId(),
         app_user_id: input.appUserId,
@@ -255,33 +263,57 @@ export async function spendHintOnServer(): Promise<number | null> {
 }
 
 /**
- * Restore / sync purchases: refresh RevenueCat customer info then re-sync
- * server balance (consumables are credited at purchase time via ledger).
+ * Restore / sync purchases: RevenueCat restore + server sync of any verified
+ * transactions not yet in the ledger (covers other-device purchases).
  */
 export async function restorePurchases(): Promise<
   { ok: true; balance: number } | { ok: false; error: string }
 > {
   const sb = getSupabase();
   if (!sb) return { ok: false, error: "الخدمة غير متاحة" };
-  const {
-    data: { session },
-  } = await sb.auth.getSession();
-  if (!session?.user?.id) {
-    return { ok: false, error: "سجّل الدخول لاستعادة المشتريات" };
-  }
+
+  let session;
   try {
-    if (Capacitor.isNativePlatform()) {
-      const ready = await initPurchases(session.user.id);
+    session = await ensureAuthSession();
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "تعذّر تجهيز الجلسة",
+    };
+  }
+  const userId = session.user.id;
+
+  try {
+    if (Capacitor.isNativePlatform() && (await isHintPacksEnabled())) {
+      const ready = await initPurchases(userId);
       if (ready) {
         const { Purchases } = await import("@revenuecat/purchases-capacitor");
         try {
-          await Purchases.logIn({ appUserID: session.user.id });
+          await Purchases.logIn({ appUserID: userId });
         } catch {
           /* ignore */
         }
         await Purchases.restorePurchases();
       }
     }
+
+    // Ask the edge function to credit any RC transactions missing from the ledger.
+    const { data, error } = await sb.functions.invoke("credit-hint-purchase", {
+      body: {
+        sync: true,
+        device_id: getAnonymousDeviceId(),
+        app_user_id: userId,
+      },
+    });
+    if (!error) {
+      const payload = data as { ok?: boolean; balance?: number; error?: string } | null;
+      const balance = Number(payload?.balance);
+      if (payload?.ok && Number.isFinite(balance)) {
+        saveHintBalance(balance);
+        return { ok: true, balance };
+      }
+    }
+
     const bal = await syncHintBalanceFromServer();
     if (bal == null) return { ok: false, error: "تعذّر مزامنة الرصيد من الخادم" };
     return { ok: true, balance: bal };
@@ -291,4 +323,9 @@ export async function restorePurchases(): Promise<
       error: e instanceof Error ? e.message : "تعذّرت استعادة المشتريات",
     };
   }
+}
+
+/** Local cache read for UI that has not yet synced. */
+export function peekLocalHintBalance(): number {
+  return loadHintBalance();
 }

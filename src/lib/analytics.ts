@@ -138,6 +138,13 @@ export async function submitAdReport(input: {
     platform: Capacitor.getPlatform(),
   };
   try {
+    // Prefer a session JWT so ad-report-notify has signed auth (anonymous OK).
+    try {
+      const { ensureAuthSession } = await import("@/lib/supabase/auth");
+      await ensureAuthSession();
+    } catch {
+      /* RPC still works for anon role; notify may reject without JWT */
+    }
     const { data, error } = await sb.rpc("submit_ad_report", {
       p_device_id: row.device_id,
       p_reason: row.reason,

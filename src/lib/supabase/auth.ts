@@ -34,6 +34,27 @@ export async function getSession(): Promise<Session | null> {
   return data.session;
 }
 
+/**
+ * Ensure a Supabase session exists for IAP / server RPCs.
+ * Uses anonymous sign-in when the player is not logged in (auth.uid() still set).
+ * Enable Anonymous Sign-Ins in the Supabase Auth dashboard.
+ */
+export async function ensureAuthSession(): Promise<Session> {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase غير مضبوط");
+
+  const { data: existing, error: existingErr } = await sb.auth.getSession();
+  if (existingErr) throw existingErr;
+  if (existing.session?.user?.id) return existing.session;
+
+  const { data, error } = await sb.auth.signInAnonymously();
+  if (error) throw error;
+  if (!data.session?.user?.id) {
+    throw new Error("تعذّر إنشاء جلسة مجهولة للشراء");
+  }
+  return data.session;
+}
+
 export async function signUpWithEmail(
   email: string,
   password: string,

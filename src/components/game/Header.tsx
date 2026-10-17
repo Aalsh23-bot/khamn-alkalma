@@ -121,7 +121,7 @@ export function Header({
           disabled={hintDisabled}
           className={cn("px-1.5", hintTone)}
         >
-          <span className="flex max-w-[5.5rem] flex-col items-center gap-0.5">
+          <span className="flex max-w-[7.5rem] flex-col items-center gap-0.5">
             {kind === "ad" ? (
               <span className="flex items-center gap-0.5">
                 <Play className="size-3.5 fill-current" strokeWidth={1.6} />
@@ -131,11 +131,11 @@ export function Header({
               <Lightbulb className="size-5" strokeWidth={1.8} />
             )}
             {!hintUsed && !hintAwaitingGuess && (
-              <span className="truncate text-[8px] font-bold leading-none">
+              <span className="max-w-[7.5rem] text-center text-[11px] font-bold leading-tight">
                 {kind === "free"
                   ? "تلميح مجاني"
                   : kind === "ad"
-                    ? "تلميح مقابل إعلان"
+                    ? "▶️ تلميح مقابل إعلان"
                     : kind === "balance"
                       ? `تلميح (${balance})`
                       : ""}

@@ -433,16 +433,6 @@ export interface Database {
         Args: Record<string, never>;
         Returns: number;
       };
-      credit_hint_purchase: {
-        Args: {
-          p_transaction_id: string;
-          p_product_id: string;
-          p_store_product_id: string;
-          p_hints: number;
-          p_device_id?: string | null;
-        };
-        Returns: number;
-      };
       credit_hint_purchase_for_user: {
         Args: {
           p_user_id: string;

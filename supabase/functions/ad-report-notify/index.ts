@@ -1,7 +1,8 @@
 /**
  * Email each accepted ad report. Prefer calling only after submit_ad_report RPC succeeds.
  * Requires: RESEND_API_KEY
- * Optional: AD_REPORT_TO, AD_REPORT_DEVICE_HMAC (if set, requires X-Device-Signature header)
+ * Requires auth: valid user JWT OR X-Device-Signature (HMAC of device_id with AD_REPORT_DEVICE_HMAC).
+ * Unsigned requests are always rejected.
  */
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
@@ -77,22 +78,21 @@ serve(async (req) => {
     );
   }
 
-  // Accept either a user JWT or a device HMAC signature (when secret configured).
   const authHeader = req.headers.get("Authorization") ?? "";
-  const hasUserJwt = authHeader.toLowerCase().startsWith("bearer ");
+  const hasBearer = authHeader.toLowerCase().startsWith("bearer ");
   const deviceHmacSecret = Deno.env.get("AD_REPORT_DEVICE_HMAC") ?? "";
-  if (deviceHmacSecret) {
-    const provided = req.headers.get("X-Device-Signature") ?? "";
+  const providedSig = (req.headers.get("X-Device-Signature") ?? "").trim();
+
+  let authorized = false;
+
+  // Prefer HMAC device signature when provided.
+  if (deviceHmacSecret && providedSig) {
     const expected = await hmacHex(deviceHmacSecret, deviceId);
-    if (provided !== expected && !hasUserJwt) {
-      return cors(
-        new Response(JSON.stringify({ ok: false, error: "unauthorized_device" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
-    }
-  } else if (hasUserJwt) {
+    if (providedSig === expected) authorized = true;
+  }
+
+  // Or a valid Supabase user JWT (anonymous included).
+  if (!authorized && hasBearer) {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     if (supabaseUrl && anonKey) {
@@ -100,10 +100,18 @@ serve(async (req) => {
         global: { headers: { Authorization: authHeader } },
       });
       const { data } = await userClient.auth.getUser();
-      if (!data.user) {
-        // Soft-fail: allow notify if RPC already persisted the report.
-      }
+      if (data.user?.id) authorized = true;
     }
+  }
+
+  // No signature and no valid JWT → reject (never soft-allow).
+  if (!authorized) {
+    return cors(
+      new Response(JSON.stringify({ ok: false, error: "signature_required" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
   }
 
   const subject = `[خمن الكلمة] بلاغ إعلان: ${body.reason ?? "غير محدد"}`;
