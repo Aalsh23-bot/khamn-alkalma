@@ -146,6 +146,16 @@ export function Game() {
   }, [hydrate]);
 
   useEffect(() => {
+    let cancelled = false;
+    void isHintPacksEnabled().then((on) => {
+      if (!cancelled) setHintPacksEnabled(on);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!toast) return;
     const id = window.setTimeout(() => setToast(null), 1600);
     return () => window.clearTimeout(id);
@@ -221,10 +231,14 @@ export function Game() {
           setModal(null);
           setAdReportOpen(true);
         }}
-        onHintShop={() => {
-          setModal(null);
-          setHintShopOpen(true);
-        }}
+        onHintShop={
+          hintPacksEnabled
+            ? () => {
+                setModal(null);
+                setHintShopOpen(true);
+              }
+            : undefined
+        }
         onAuth={openAuthModal}
         onWordsAdmin={() => setModal("wordsAdmin")}
         showWordsAdmin={isAdmin}
