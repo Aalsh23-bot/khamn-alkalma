@@ -95,12 +95,21 @@ export type PurchaseResult =
   | { ok: true; balance: number }
   | { ok: false; error: string; cancelled?: boolean };
 
-/** Purchase a consumable hint pack and credit balance (server + local). */
+/** Purchase a consumable hint pack; server credits only after RevenueCat verifies the tx. */
 export async function purchaseHintPack(productId: HintPackId): Promise<PurchaseResult> {
   if (!Capacitor.isNativePlatform()) {
-    return { ok: false, error: "المشتريات متاحة داخل تطبيق iOS فقط" };
+    return { ok: false, error: "المشتريات متاحة داخل التطبيق فقط" };
   }
-  const ready = await initPurchases();
+  const sb = getSupabase();
+  if (!sb) return { ok: false, error: "الخدمة غير متاحة" };
+  const {
+    data: { session },
+  } = await sb.auth.getSession();
+  if (!session?.user?.id) {
+    return { ok: false, error: "سجّل الدخول أولاً لشراء باقات التلميحات" };
+  }
+
+  const ready = await initPurchases(session.user.id);
   if (!ready) {
     return {
       ok: false,
@@ -110,6 +119,13 @@ export async function purchaseHintPack(productId: HintPackId): Promise<PurchaseR
 
   try {
     const { Purchases } = await import("@revenuecat/purchases-capacitor");
+    // Bind the StoreKit purchase to the authenticated Supabase user.
+    try {
+      await Purchases.logIn({ appUserID: session.user.id });
+    } catch {
+      /* already configured with this id */
+    }
+
     const offerings = await Purchases.getOfferings();
     const pkg = offerings.current?.availablePackages.find(
       (p) =>
@@ -125,14 +141,16 @@ export async function purchaseHintPack(productId: HintPackId): Promise<PurchaseR
     }
 
     const result = await Purchases.purchasePackage({ aPackage: pkg });
-    const transactionId =
-      result.transaction?.transactionIdentifier ||
-      `${productId}_${Date.now()}`;
+    const transactionId = result.transaction?.transactionIdentifier;
+    if (!transactionId) {
+      return { ok: false, error: "لم يُرجع المتجر معرّف معاملة صالحاً" };
+    }
 
     const credited = await creditPurchaseOnServer({
       productId,
       transactionId,
       storeProductId: pkg.product.identifier,
+      appUserId: session.user.id,
     });
 
     trackEvent("purchase", {
@@ -142,14 +160,7 @@ export async function purchaseHintPack(productId: HintPackId): Promise<PurchaseR
     });
 
     if (!credited.ok) {
-      // Still credit locally so the player is not stuck if the edge function is down.
-      const hints = hintsForProduct(productId);
-      const next = loadHintBalance() + hints;
-      saveHintBalance(next);
-      return {
-        ok: true,
-        balance: next,
-      };
+      return { ok: false, error: credited.error };
     }
     saveHintBalance(credited.balance);
     return { ok: true, balance: credited.balance };
@@ -157,7 +168,10 @@ export async function purchaseHintPack(productId: HintPackId): Promise<PurchaseR
     const message = err instanceof Error ? err.message : String(err);
     const cancelled =
       /cancel|user cancelled|purchasecancelled/i.test(message) ||
-      (err && typeof err === "object" && "code" in err && String((err as { code?: string }).code).includes("PURCHASE_CANCELLED"));
+      (err &&
+        typeof err === "object" &&
+        "code" in err &&
+        String((err as { code?: string }).code).includes("PURCHASE_CANCELLED"));
     return {
       ok: false,
       cancelled: Boolean(cancelled),
@@ -170,6 +184,7 @@ async function creditPurchaseOnServer(input: {
   productId: string;
   transactionId: string;
   storeProductId: string;
+  appUserId: string;
 }): Promise<{ ok: true; balance: number } | { ok: false; error: string }> {
   const sb = getSupabase();
   if (!sb) return { ok: false, error: "Supabase غير مضبوط" };
@@ -180,11 +195,18 @@ async function creditPurchaseOnServer(input: {
         store_product_id: input.storeProductId,
         transaction_id: input.transactionId,
         device_id: getAnonymousDeviceId(),
+        app_user_id: input.appUserId,
       },
     });
     if (error) return { ok: false, error: error.message };
-    const balance = Number((data as { balance?: number } | null)?.balance);
-    if (!Number.isFinite(balance)) return { ok: false, error: "رد غير صالح من الخادم" };
+    const payload = data as { balance?: number; error?: string; ok?: boolean } | null;
+    if (payload && payload.ok === false) {
+      return { ok: false, error: payload.error || "رفض الخادم اعتماد الشراء" };
+    }
+    const balance = Number(payload?.balance);
+    if (!Number.isFinite(balance)) {
+      return { ok: false, error: payload?.error || "رد غير صالح من الخادم" };
+    }
     return { ok: true, balance };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "فشل الاعتماد" };
