@@ -7,6 +7,8 @@ export type FreeHintStatus = {
   nextAt: string | null;
   kuwaitDate: string | null;
   balance: number | null;
+  serverNow: string | null;
+  loadError: boolean;
 };
 
 function parseStatus(raw: unknown): FreeHintStatus {
@@ -21,29 +23,47 @@ function parseStatus(raw: unknown): FreeHintStatus {
         : data.balance != null
           ? Number(data.balance)
           : null,
+    serverNow: typeof data.server_now === "string" ? data.server_now : null,
+    loadError: false,
   };
 }
 
 export async function fetchFreeHintStatus(): Promise<FreeHintStatus> {
+  const empty = (): FreeHintStatus => ({
+    available: false,
+    nextAt: null,
+    kuwaitDate: null,
+    balance: null,
+    serverNow: null,
+    loadError: true,
+  });
   const sb = getSupabase();
-  if (!sb) {
-    return { available: false, nextAt: null, kuwaitDate: null, balance: null };
-  }
+  if (!sb) return empty();
   try {
     await ensureAuthSession();
     const { data, error } = await sb.rpc("get_free_hint_status");
-    if (error) {
-      return { available: false, nextAt: null, kuwaitDate: null, balance: null };
+    if (error) return empty();
+    const parsed = parseStatus(data);
+    const payload = data as { ok?: boolean } | null;
+    if (payload && payload.ok === false) {
+      // Authenticated path may still return ok:false for not_authenticated race.
+      return { ...parsed, loadError: true };
     }
-    return parseStatus(data);
+    return parsed;
   } catch {
-    return { available: false, nextAt: null, kuwaitDate: null, balance: null };
+    return empty();
   }
 }
 
 export async function claimFreeDailyHint(): Promise<
-  | { ok: true; balance: number; nextAt: string | null }
-  | { ok: false; error: string; nextAt?: string | null; balance?: number }
+  | { ok: true; balance: number; nextAt: string | null; serverNow: string | null }
+  | {
+      ok: false;
+      error: string;
+      nextAt?: string | null;
+      balance?: number;
+      serverNow?: string | null;
+    }
 > {
   const sb = getSupabase();
   if (!sb) return { ok: false, error: "الخدمة غير متاحة" };
@@ -52,6 +72,8 @@ export async function claimFreeDailyHint(): Promise<
     const { data, error } = await sb.rpc("claim_free_daily_hint");
     if (error) return { ok: false, error: error.message };
     const payload = data as Record<string, unknown> | null;
+    const serverNow =
+      typeof payload?.server_now === "string" ? payload.server_now : null;
     if (!payload || payload.ok !== true) {
       const nextAt =
         typeof payload?.next_at === "string" ? payload.next_at : null;
@@ -62,12 +84,14 @@ export async function claimFreeDailyHint(): Promise<
           error: "أخذت التلميح المجاني لهذا اليوم",
           nextAt,
           balance: Number.isFinite(bal) ? bal : undefined,
+          serverNow,
         };
       }
       return {
         ok: false,
         error: String(payload?.error || "تعذّر أخذ التلميح المجاني"),
         nextAt,
+        serverNow,
       };
     }
     const balance = Number(payload.balance);
@@ -79,6 +103,7 @@ export async function claimFreeDailyHint(): Promise<
       ok: true,
       balance,
       nextAt: typeof payload.next_at === "string" ? payload.next_at : null,
+      serverNow,
     };
   } catch (e) {
     return {

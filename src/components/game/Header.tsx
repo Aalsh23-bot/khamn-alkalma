@@ -4,7 +4,6 @@ import {
   HelpCircle,
   House,
   Lightbulb,
-  Play,
   Settings2,
   Share2,
 } from "lucide-react";
@@ -53,8 +52,7 @@ export function Header({
   onHelp,
   onStats,
   onSettings,
-  onHintAd,
-  onHintBalance,
+  onHint,
   onShareChallenge,
   hintUsed,
   hintDisabled,
@@ -67,8 +65,7 @@ export function Header({
   onHelp: () => void;
   onStats: () => void;
   onSettings: () => void;
-  onHintAd: () => void;
-  onHintBalance: () => void;
+  onHint: () => void;
   onShareChallenge?: () => void;
   hintUsed: boolean;
   hintDisabled: boolean;
@@ -80,7 +77,7 @@ export function Header({
   const exhausted = hintUsed || awaiting;
 
   return (
-    <header className="flex items-center justify-between gap-0.5 border-b border-line px-0.5 py-1 sm:gap-1 sm:px-1">
+    <header className="flex items-center justify-between gap-0.5 border-b border-line px-1 py-1">
       <div className="flex shrink-0 items-center">
         <IconBtn label="الرئيسية" onClick={onHome}>
           <House className="size-5" strokeWidth={1.8} />
@@ -90,8 +87,8 @@ export function Header({
         </IconBtn>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col items-center px-0.5">
-        <h1 className="font-display max-w-full truncate text-[1.15rem] font-semibold leading-none tracking-tight text-fg sm:text-[1.35rem]">
+      <div className="flex min-w-0 flex-1 flex-col items-center px-1">
+        <h1 className="font-display text-[1.35rem] font-semibold leading-none tracking-tight text-fg">
           {mode === "daily"
             ? "كلمة اليوم"
             : mode === "challenge"
@@ -100,53 +97,35 @@ export function Header({
         </h1>
       </div>
 
-      <div className="flex shrink-0 items-center gap-0.5">
+      <div className="flex shrink-0 items-center">
         {mode === "challenge" && onShareChallenge && (
           <IconBtn label="شارك التحدّي" onClick={onShareChallenge} active>
             <Share2 className="size-5" strokeWidth={1.8} />
           </IconBtn>
         )}
 
-        {/* Dual hint buttons — same footprint as prior single control (SE-safe). */}
         <IconBtn
           label={
             awaiting
               ? "أدخل تخميناً ثم استخدم التلميح مرة أخرى"
-              : "تلميح بإعلان"
+              : "تلميح"
           }
-          onClick={onHintAd}
+          onClick={onHint}
           active={exhausted}
           disabled={hintDisabled}
-          className={cn(
-            "px-1",
-            !exhausted && "bg-[#6aaa64] text-white hover:bg-[#6aaa64]/90",
-          )}
+          className="px-1"
         >
-          <span className="flex w-[3.35rem] flex-col items-center gap-0.5 sm:w-[3.6rem]">
-            <Play className="size-3.5 fill-current" strokeWidth={1.6} />
+          <span className="relative flex flex-col items-center gap-0.5">
+            <Lightbulb className="size-5" strokeWidth={1.8} />
             {!exhausted && (
-              <span className="text-center text-[9px] font-bold leading-tight sm:text-[10px]">
-                تلميح بإعلان
-              </span>
+              <span className="text-[9px] font-bold leading-none">تلميح</span>
             )}
-          </span>
-        </IconBtn>
-
-        <IconBtn
-          label={`تلميحاتك (${balance})`}
-          onClick={onHintBalance}
-          active={exhausted}
-          disabled={hintDisabled && balance > 0}
-          className={cn(
-            "px-1",
-            !exhausted && "bg-[#3a6ea5] text-white hover:bg-[#3a6ea5]/90",
-          )}
-        >
-          <span className="flex w-[3.35rem] flex-col items-center gap-0.5 sm:w-[3.6rem]">
-            <Lightbulb className="size-3.5" strokeWidth={1.8} />
-            {!exhausted && (
-              <span className="text-center text-[9px] font-bold leading-tight tabular-nums sm:text-[10px]">
-                تلميحاتك ({balance})
+            {balance > 0 && !exhausted && (
+              <span
+                className="absolute -top-1.5 -left-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[9px] font-bold text-accent-fg tabular-nums"
+                aria-hidden
+              >
+                {balance > 99 ? "99+" : balance}
               </span>
             )}
           </span>

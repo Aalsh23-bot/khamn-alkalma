@@ -39,23 +39,35 @@ export function HintShopModal({
   const [restoring, setRestoring] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [freeAvailable, setFreeAvailable] = useState(true);
+  const [freeAvailable, setFreeAvailable] = useState(false);
   const [freeNextAt, setFreeNextAt] = useState<string | null>(null);
+  const [freeLoadError, setFreeLoadError] = useState(false);
   const [countdown, setCountdown] = useState("00:00:00");
+  const [clockOffsetMs, setClockOffsetMs] = useState(0);
 
-  useEffect(() => {
-    if (!open) return;
+  async function refreshShop() {
     setMessage(null);
     setBalance(loadHintBalance());
     setLoading(true);
-    void (async () => {
+    setFreeLoadError(false);
+    try {
       const [enabled, status] = await Promise.all([
         isHintPacksEnabled(),
         fetchFreeHintStatus(),
       ]);
       setPacksEnabled(enabled);
-      setFreeAvailable(status.available);
-      setFreeNextAt(status.nextAt);
+      if (status.loadError) {
+        setFreeLoadError(true);
+        setFreeAvailable(false);
+        setFreeNextAt(null);
+      } else {
+        setFreeAvailable(status.available);
+        setFreeNextAt(status.nextAt);
+        if (status.serverNow) {
+          const serverMs = new Date(status.serverNow).getTime();
+          if (Number.isFinite(serverMs)) setClockOffsetMs(serverMs - Date.now());
+        }
+      }
       if (status.balance != null && Number.isFinite(status.balance)) {
         setBalance(status.balance);
       }
@@ -68,20 +80,27 @@ export function HintShopModal({
       } else {
         setPacks([]);
       }
+    } finally {
       setLoading(false);
-    })();
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    void refreshShop();
   }, [open]);
 
   useEffect(() => {
-    if (!open || freeAvailable || !freeNextAt) return;
+    if (!open || freeAvailable || !freeNextAt || freeLoadError) return;
     const tick = () => {
-      const ms = new Date(freeNextAt).getTime() - Date.now();
-      setCountdown(formatCountdown(ms));
+      const target = new Date(freeNextAt).getTime();
+      const nowApprox = Date.now() + clockOffsetMs;
+      setCountdown(formatCountdown(target - nowApprox));
     };
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
-  }, [open, freeAvailable, freeNextAt]);
+  }, [open, freeAvailable, freeNextAt, freeLoadError, clockOffsetMs]);
 
   async function buy(productId: HintPackId) {
     if (busyId) return;
@@ -151,30 +170,46 @@ export function HintShopModal({
             <h3 className="text-xs font-semibold tracking-wide text-muted">
               يومي
             </h3>
-            <button
-              type="button"
-              disabled={Boolean(busyId) || !freeAvailable}
-              onClick={() => void claimFree()}
-              className={cn(
-                "mt-2 flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-right transition-transform active:scale-[0.99] disabled:opacity-70",
-                freeAvailable ? "bg-[#6aaa64] text-white" : "bg-key text-fg",
-              )}
-            >
-              <span className="font-semibold">
-                {freeAvailable
-                  ? "خذ تلميحك المجاني"
-                  : "التلميح المجاني الجاي"}
-              </span>
-              <span className="shrink-0 text-sm font-semibold tabular-nums">
-                {busyId === "free"
-                  ? "…"
-                  : freeAvailable
-                    ? "+1"
-                    : freeNextAt
-                      ? countdown
-                      : "—"}
-              </span>
-            </button>
+            {freeLoadError ? (
+              <div className="mt-2 rounded-xl bg-key px-3 py-3 text-center">
+                <p className="text-sm text-fg">تعذّر التحميل، حاول مرة ثانية</p>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => void refreshShop()}
+                  className="mt-2 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg disabled:opacity-55"
+                >
+                  إعادة المحاولة
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={Boolean(busyId) || loading || !freeAvailable}
+                onClick={() => void claimFree()}
+                className={cn(
+                  "mt-2 flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-right transition-transform active:scale-[0.99] disabled:opacity-70",
+                  freeAvailable ? "bg-[#6aaa64] text-white" : "bg-key text-fg",
+                )}
+              >
+                <span className="font-semibold">
+                  {freeAvailable
+                    ? "خذ تلميحك المجاني"
+                    : "التلميح المجاني الجاي"}
+                </span>
+                <span className="shrink-0 text-sm font-semibold tabular-nums">
+                  {busyId === "free"
+                    ? "…"
+                    : freeAvailable
+                      ? "+1"
+                      : freeNextAt
+                        ? countdown
+                        : loading
+                          ? "…"
+                          : "—"}
+                </span>
+              </button>
+            )}
             <p className="mt-1.5 text-[11px] leading-5 text-muted">
               يتجدد كل يوم الساعة ١٢ ليلاً بتوقيت الكويت.
             </p>

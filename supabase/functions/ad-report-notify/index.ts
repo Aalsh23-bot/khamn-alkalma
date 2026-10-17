@@ -109,6 +109,16 @@ serve(async (req) => {
     }
   }
 
+  // Claim the send slot BEFORE calling Resend so concurrent invokes don't double-email.
+  const { data: claimed, error: claimErr } = await admin.rpc(
+    "claim_ad_report_email",
+    { p_report_id: reportId },
+  );
+  if (claimErr) return json(500, { error: claimErr.message });
+  if (!claimed) {
+    return json(200, { ok: true, already_sent: true });
+  }
+
   const subject = `[خمن الكلمة] بلاغ إعلان: ${row.reason ?? "غير محدد"}`;
   const text = [
     `سبب البلاغ: ${row.reason ?? ""}`,
@@ -137,9 +147,9 @@ serve(async (req) => {
 
   if (!res.ok) {
     const errText = await res.text();
-    return json(502, { error: errText });
+    // Slot already claimed — do not retry automatically (avoids duplicate mail storms).
+    return json(502, { error: errText, claimed: true });
   }
 
-  await admin.rpc("mark_ad_report_emailed", { p_report_id: reportId });
   return json(200, { ok: true });
 });

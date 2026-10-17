@@ -2,8 +2,8 @@
  * Supabase auth storage backed by iOS Keychain / Android Keystore when native,
  * with an in-memory + localStorage fallback for web/preview.
  *
- * Uses capacitor-secure-storage-plugin (Keychain) so sessions survive reinstall
- * when the OS restores the keychain item.
+ * Migrates legacy 1.0.1 localStorage sessions into Keychain once so users are
+ * not unexpectedly signed out after upgrading.
  */
 import type { SupportedStorage } from "@supabase/supabase-js";
 
@@ -17,6 +17,7 @@ type SecurePlugin = {
 
 let pluginPromise: Promise<SecurePlugin | null> | null = null;
 const memory = new Map<string, string>();
+const migratedKeys = new Set<string>();
 
 async function getSecurePlugin(): Promise<SecurePlugin | null> {
   if (pluginPromise) return pluginPromise;
@@ -62,6 +63,47 @@ function lsRemove(key: string): void {
   }
 }
 
+/** Legacy localStorage keys used before Keychain (1.0.1 and bare supabase-js). */
+function legacyLocalValues(storageKey: string): string | null {
+  const candidates = [
+    PREFIX + storageKey,
+    storageKey,
+  ];
+  if (typeof localStorage !== "undefined") {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k) continue;
+        // Default supabase-js key: sb-<project-ref>-auth-token
+        if (/^sb-[a-z0-9]+-auth-token$/i.test(k)) candidates.push(k);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  for (const k of candidates) {
+    const v = lsGet(k);
+    if (v) return v;
+  }
+  return null;
+}
+
+async function migrateToKeychain(
+  storageKey: string,
+  value: string,
+  secure: SecurePlugin,
+): Promise<void> {
+  if (migratedKeys.has(storageKey)) return;
+  migratedKeys.add(storageKey);
+  const full = PREFIX + storageKey;
+  try {
+    await secure.set({ key: full, value });
+    lsSet(full, value);
+  } catch (err) {
+    console.warn("[khamsa] Keychain migrate failed", err);
+  }
+}
+
 export const secureAuthStorage: SupportedStorage = {
   async getItem(key: string) {
     const full = PREFIX + key;
@@ -70,14 +112,20 @@ export const secureAuthStorage: SupportedStorage = {
       try {
         const { value } = await secure.get({ key: full });
         if (value != null && value !== "") {
-          lsSet(full, value); // keep web cache warm for sync reads
+          lsSet(full, value);
           return value;
         }
       } catch {
-        /* key missing */
+        /* key missing in Keychain */
+      }
+      // One-time migration from 1.0.1 localStorage session.
+      const legacy = legacyLocalValues(key);
+      if (legacy) {
+        await migrateToKeychain(key, legacy, secure);
+        return legacy;
       }
     }
-    return lsGet(full);
+    return lsGet(full) ?? legacyLocalValues(key);
   },
 
   async setItem(key: string, value: string) {
@@ -96,6 +144,7 @@ export const secureAuthStorage: SupportedStorage = {
   async removeItem(key: string) {
     const full = PREFIX + key;
     lsRemove(full);
+    lsRemove(key);
     const secure = await getSecurePlugin();
     if (secure) {
       try {

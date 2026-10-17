@@ -470,6 +470,14 @@ export interface Database {
         Args: { p_report_id: string };
         Returns: boolean;
       };
+      claim_ad_report_email: {
+        Args: { p_report_id: string };
+        Returns: boolean;
+      };
+      merge_anonymous_hint_balance: {
+        Args: { p_from_user_id: string; p_to_user_id: string };
+        Returns: unknown;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

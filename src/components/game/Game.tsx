@@ -31,8 +31,10 @@ import { fetchIsAppAdmin } from "@/lib/supabase/api";
 import { useSupabaseAuth } from "@/lib/supabase/use-auth";
 import { RewardedAdOverlay } from "./RewardedAdOverlay";
 import { loadHintBalance } from "@/lib/game/hint-economy";
+import { allLettersRevealed } from "@/lib/game/hint-board";
 import { AdReportModal } from "./AdReportModal";
 import { HintShopModal } from "./HintShopModal";
+import { HintSheet } from "./HintSheet";
 
 export function Game() {
   const hydrated = useGame((s) => s.hydrated);
@@ -91,6 +93,7 @@ export function Game() {
   const [adBusy, setAdBusy] = useState(false);
   const [adReportOpen, setAdReportOpen] = useState(false);
   const [hintShopOpen, setHintShopOpen] = useState(false);
+  const [hintSheetOpen, setHintSheetOpen] = useState(false);
   const [hintBalanceTick, setHintBalanceTick] = useState(0);
   const auth = useSupabaseAuth();
   const authLabel =
@@ -237,6 +240,38 @@ export function Game() {
         onClose={() => setHintShopOpen(false)}
         onBalanceChange={() => setHintBalanceTick((n) => n + 1)}
         onRequestAuth={openAuthModal}
+      />
+      <HintSheet
+        open={hintSheetOpen}
+        onClose={() => setHintSheetOpen(false)}
+        balance={hintBalance}
+        adBusy={adBusy}
+        onBalanceChange={() => setHintBalanceTick((n) => n + 1)}
+        onOpenShop={() => setHintShopOpen(true)}
+        onUseBalance={() => {
+          useHint("balance");
+          setHintBalanceTick((n) => n + 1);
+        }}
+        onWatchAd={() => {
+          void (async () => {
+            if (adBusy || hintUsed || hintAwaitingGuess || inputLocked) return;
+            setAdBusy(true);
+            try {
+              const result = await showRewardedAd("hint");
+              if (result === "rewarded") {
+                useHint("ad");
+                setHintBalanceTick((n) => n + 1);
+                setHintSheetOpen(false);
+              } else if (result === "dismissed") {
+                setToast("شاهِد الإعلان للنهاية لكشف حرف");
+              } else {
+                setToast("الإعلان غير متوفر");
+              }
+            } finally {
+              setAdBusy(false);
+            }
+          })();
+        }}
       />
       <WordsAdminModal
         open={modal === "wordsAdmin"}
@@ -403,33 +438,13 @@ export function Game() {
             ? () => setModal("challengeInvite")
             : undefined
         }
-        onHintAd={() => {
-          void (async () => {
-            if (adBusy || hintUsed || hintAwaitingGuess || inputLocked) return;
-            setAdBusy(true);
-            try {
-              const result = await showRewardedAd("hint");
-              if (result === "rewarded") {
-                useHint("ad");
-                setHintBalanceTick((n) => n + 1);
-              } else if (result === "dismissed") {
-                setToast("شاهِد الإعلان للنهاية لكشف حرف");
-              } else {
-                setToast("الإعلان غير متوفر");
-              }
-            } finally {
-              setAdBusy(false);
-            }
-          })();
-        }}
-        onHintBalance={() => {
-          if (hintUsed || hintAwaitingGuess || inputLocked) return;
-          if (loadHintBalance() > 0) {
-            useHint("balance");
-            setHintBalanceTick((n) => n + 1);
+        onHint={() => {
+          if (adBusy || hintUsed || hintAwaitingGuess || inputLocked) return;
+          if (allLettersRevealed(evaluations, hintedCols, guesses.length)) {
+            setToast("كل الحروف مكشوفة");
             return;
           }
-          setHintShopOpen(true);
+          setHintSheetOpen(true);
         }}
         hintUsed={hintUsed}
         hintAwaitingGuess={hintAwaitingGuess}

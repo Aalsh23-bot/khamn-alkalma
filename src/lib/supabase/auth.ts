@@ -117,22 +117,14 @@ export async function signInWithEmail(
   const sb = getSupabase();
   if (!sb) throw new Error("Supabase غير مضبوط");
 
-  // If currently anonymous, prefer linking email onto this uid when possible.
+  // Sign-in must NOT convert an anonymous session into an email account.
+  // Capture anonymous token so purchased hints can merge into the existing account.
   const { data: existing } = await sb.auth.getSession();
-  if (existing.session?.user && (existing.session.user as { is_anonymous?: boolean }).is_anonymous) {
-    try {
-      const { data, error } = await sb.auth.updateUser({
-        email: email.trim(),
-        password,
-      });
-      if (!error && data.user) {
-        const user = toAuthUser(data.user);
-        if (user) return user;
-      }
-    } catch {
-      /* fall through to password sign-in */
-    }
-  }
+  const prevAccess =
+    existing.session?.user &&
+    (existing.session.user as { is_anonymous?: boolean }).is_anonymous
+      ? existing.session.access_token
+      : null;
 
   const { data, error } = await sb.auth.signInWithPassword({
     email: email.trim(),
@@ -141,6 +133,19 @@ export async function signInWithEmail(
   if (error) throw error;
   const user = toAuthUser(data.user);
   if (!user) throw new Error("تعذّر تسجيل الدخول");
+
+  if (prevAccess && data.user?.id) {
+    try {
+      await sb.functions.invoke("merge-anonymous-hints", {
+        body: { previous_access_token: prevAccess },
+      });
+      const { syncHintBalanceFromServer } = await import("@/lib/iap/purchases");
+      await syncHintBalanceFromServer();
+    } catch {
+      /* restore / later sync may recover purchased balance */
+    }
+  }
+
   return user;
 }
 

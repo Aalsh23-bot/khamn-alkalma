@@ -619,11 +619,7 @@ export const useGame = create<GameStore>((set, get) => ({
       }
     }
     // Round hints come from balance or rewarded ad (caller chooses). Free daily
-    // hint is claimed in the shop and added to balance (Kuwait midnight).
-    if (source === "balance") {
-      if (!consumePurchasedHint()) return;
-    }
-
+    // hint is claimed in the shop/sheet and added to balance (Kuwait midnight).
     const known = new Set<number>();
     for (let g = 0; g < s.guesses.length; g++) {
       const ev = s.evaluations[g] ?? [];
@@ -637,6 +633,10 @@ export const useGame = create<GameStore>((set, get) => ({
     if (unknown.length === 0) {
       set({ toast: "كل الحروف مكشوفة" });
       return;
+    }
+    // Spend only after we know a letter can be revealed.
+    if (source === "balance") {
+      if (!consumePurchasedHint()) return;
     }
     const col = unknown[0]!;
     const hintCount = s.hintCount + 1;

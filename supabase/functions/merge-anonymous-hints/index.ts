@@ -1,6 +1,6 @@
 /**
- * After anonymous → Apple/email upgrade that created a NEW uid, move hint
- * balance + ledger rows from the previous anonymous user to the new one.
+ * After anonymous → Apple/email upgrade that created a NEW uid, move
+ * PURCHASED hint balance (not free daily claims) via atomic SQL RPC.
  *
  * Auth: Bearer = new user JWT
  * Body: { previous_access_token: string }
@@ -67,70 +67,11 @@ serve(async (req) => {
   }
 
   const admin = createClient(supabaseUrl, serviceKey);
-
-  // Move ledger rows (ignore conflicts on transaction_id already on new user).
-  await admin
-    .from("hint_purchase_ledger")
-    .update({ user_id: newUser.id })
-    .eq("user_id", prevUser.id);
-
-  const { data: prevBal } = await admin
-    .from("hint_balances")
-    .select("balance")
-    .eq("user_id", prevUser.id)
-    .maybeSingle();
-  const add = Math.max(0, Number(prevBal?.balance ?? 0));
-
-  if (add > 0) {
-    const canonical = `user_${newUser.id}`;
-    const { data: existing } = await admin
-      .from("hint_balances")
-      .select("balance")
-      .eq("user_id", newUser.id)
-      .maybeSingle();
-    if (existing) {
-      await admin
-        .from("hint_balances")
-        .update({
-          balance: Number(existing.balance ?? 0) + add,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", newUser.id);
-    } else {
-      await admin.from("hint_balances").insert({
-        device_id: canonical,
-        user_id: newUser.id,
-        balance: add,
-        updated_at: new Date().toISOString(),
-      });
-    }
-    await admin.from("hint_balances").delete().eq("user_id", prevUser.id);
-  }
-
-  // Free-claim row: keep the more recent claim_date on the surviving user.
-  const { data: prevClaim } = await admin
-    .from("hint_free_claims")
-    .select("claim_date")
-    .eq("user_id", prevUser.id)
-    .maybeSingle();
-  if (prevClaim?.claim_date) {
-    await admin.from("hint_free_claims").upsert({
-      user_id: newUser.id,
-      claim_date: prevClaim.claim_date,
-      updated_at: new Date().toISOString(),
-    });
-    await admin.from("hint_free_claims").delete().eq("user_id", prevUser.id);
-  }
-
-  const { data: finalRow } = await admin
-    .from("hint_balances")
-    .select("balance")
-    .eq("user_id", newUser.id)
-    .maybeSingle();
-
-  return json(200, {
-    ok: true,
-    merged: true,
-    balance: Number(finalRow?.balance ?? 0),
+  const { data, error } = await admin.rpc("merge_anonymous_hint_balance", {
+    p_from_user_id: prevUser.id,
+    p_to_user_id: newUser.id,
   });
+
+  if (error) return json(500, { error: error.message });
+  return json(200, (data as Record<string, unknown>) ?? { ok: true });
 });
