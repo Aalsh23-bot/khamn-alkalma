@@ -9,6 +9,7 @@ import {
 } from "@/lib/iap/purchases";
 import type { HintPackId } from "@/lib/iap/config";
 import { loadHintBalance } from "@/lib/game/hint-economy";
+import { isHintPacksEnabled } from "@/lib/iap/feature-flags";
 
 export function HintShopModal({
   open,

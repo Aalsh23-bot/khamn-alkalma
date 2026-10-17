@@ -36,6 +36,7 @@ import {
 import { resolveHintOffer } from "@/lib/game/hint-economy";
 import { AdReportModal } from "./AdReportModal";
 import { HintShopModal } from "./HintShopModal";
+import { isHintPacksEnabled } from "@/lib/iap/feature-flags";
 
 export function Game() {
   const hydrated = useGame((s) => s.hydrated);
@@ -94,6 +95,7 @@ export function Game() {
   const [adBusy, setAdBusy] = useState(false);
   const [adReportOpen, setAdReportOpen] = useState(false);
   const [hintShopOpen, setHintShopOpen] = useState(false);
+  const [hintPacksEnabled, setHintPacksEnabled] = useState(false);
   const [hintBalanceTick, setHintBalanceTick] = useState(0);
   const auth = useSupabaseAuth();
   const authLabel = auth.user?.displayName || auth.user?.email || null;
