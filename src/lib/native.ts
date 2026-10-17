@@ -76,7 +76,7 @@ export async function bootstrapNative(): Promise<void> {
 
   // Warm AdMob after ATT prompt on iOS (required when declaring tracking).
   try {
-    const { AdMob } = await import("@capacitor-community/admob");
+    const { AdMob, MaxAdContentRating } = await import("@capacitor-community/admob");
     if (Capacitor.getPlatform() === "ios") {
       await new Promise<void>((resolve) => {
         window.setTimeout(resolve, 450);
@@ -97,6 +97,7 @@ export async function bootstrapNative(): Promise<void> {
     }
     await AdMob.initialize({
       initializeForTesting: !ADMOB.useProductionIds,
+      maxAdContentRating: MaxAdContentRating.ParentalGuidance,
     });
   } catch {
     /* AdMob optional until store IDs are ready */

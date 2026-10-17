@@ -30,6 +30,11 @@ import { showRewardedAd } from "@/lib/ads/ads";
 import { fetchIsAppAdmin } from "@/lib/supabase/api";
 import { useSupabaseAuth } from "@/lib/supabase/use-auth";
 import { RewardedAdOverlay } from "./RewardedAdOverlay";
+import { loadHintBalance } from "@/lib/game/hint-economy";
+import { allLettersRevealed } from "@/lib/game/hint-board";
+import { AdReportModal } from "./AdReportModal";
+import { HintShopModal } from "./HintShopModal";
+import { HintSheet } from "./HintSheet";
 
 export function Game() {
   const hydrated = useGame((s) => s.hydrated);
@@ -63,6 +68,7 @@ export function Game() {
   const shake = useGame((s) => s.shake);
   const hintedCols = useGame((s) => s.hintedCols);
   const hintUsed = useGame((s) => s.hintUsed);
+  const hintCount = useGame((s) => s.hintCount);
   const hintAwaitingGuess = useGame((s) => s.hintAwaitingGuess);
   const toast = useGame((s) => s.toast);
   const modal = useGame((s) => s.modal);
@@ -85,10 +91,20 @@ export function Game() {
   const setSound = useGame((s) => s.setSound);
 
   const [adBusy, setAdBusy] = useState(false);
+  const [adReportOpen, setAdReportOpen] = useState(false);
+  const [hintShopOpen, setHintShopOpen] = useState(false);
+  const [hintSheetOpen, setHintSheetOpen] = useState(false);
+  const [hintBalanceTick, setHintBalanceTick] = useState(0);
   const auth = useSupabaseAuth();
-  const authLabel = auth.user?.displayName || auth.user?.email || null;
+  const authLabel =
+    auth.user && !auth.user.isAnonymous
+      ? auth.user.displayName || auth.user.email || null
+      : null;
   const [isAdmin, setIsAdmin] = useState(false);
   const authOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // hintBalanceTick forces re-read after shop purchase / consume.
+  void hintBalanceTick;
+  const hintBalance = loadHintBalance();
 
   /** Defer so the opening tap does not dismiss the newly opened auth dialog. */
   function openAuthModal() {
@@ -200,11 +216,62 @@ export function Game() {
         onSound={setSound}
         onInstall={() => setModal("install")}
         onPrivacy={() => setModal("privacy")}
+        onReportAd={() => {
+          setModal(null);
+          setAdReportOpen(true);
+        }}
+        onHintShop={() => {
+          setModal(null);
+          setHintShopOpen(true);
+        }}
         onAuth={openAuthModal}
         onWordsAdmin={() => setModal("wordsAdmin")}
         showWordsAdmin={isAdmin}
         authLabel={authLabel}
         isNative={isNativeApp()}
+      />
+      <AdReportModal
+        open={adReportOpen}
+        onClose={() => setAdReportOpen(false)}
+        onSubmitted={() => setToast("شكراً، وصلنا بلاغك")}
+      />
+      <HintShopModal
+        open={hintShopOpen}
+        onClose={() => setHintShopOpen(false)}
+        onBalanceChange={() => setHintBalanceTick((n) => n + 1)}
+        onRequestAuth={openAuthModal}
+      />
+      <HintSheet
+        open={hintSheetOpen}
+        onClose={() => setHintSheetOpen(false)}
+        balance={hintBalance}
+        adBusy={adBusy}
+        onBalanceChange={() => setHintBalanceTick((n) => n + 1)}
+        onOpenShop={() => setHintShopOpen(true)}
+        onUseBalance={() => {
+          useHint("balance");
+          setHintBalanceTick((n) => n + 1);
+        }}
+        onWatchAd={() => {
+          void (async () => {
+            if (adBusy || hintUsed || hintAwaitingGuess || inputLocked) return;
+            setAdBusy(true);
+            try {
+              const result = await showRewardedAd("hint");
+              if (result === "rewarded") {
+                useHint("ad");
+                setHintBalanceTick((n) => n + 1);
+                setHintSheetOpen(false);
+              } else if (result === "dismissed") {
+                setToast("شاهِد الإعلان للنهاية لكشف حرف");
+              } else {
+                setToast("الإعلان غير متوفر");
+              }
+            } finally {
+              setAdBusy(false);
+            }
+          })();
+        }}
       />
       <WordsAdminModal
         open={modal === "wordsAdmin"}
@@ -372,21 +439,16 @@ export function Game() {
             : undefined
         }
         onHint={() => {
-          void (async () => {
-            if (adBusy || hintUsed || hintAwaitingGuess || inputLocked) return;
-            setAdBusy(true);
-            try {
-              const result = await showRewardedAd("hint");
-              if (result === "rewarded") useHint();
-              else if (result === "dismissed") setToast("شاهِد الإعلان للنهاية لكشف حرف");
-              else setToast("الإعلان غير متاح الآن");
-            } finally {
-              setAdBusy(false);
-            }
-          })();
+          if (adBusy || hintUsed || hintAwaitingGuess || inputLocked) return;
+          if (allLettersRevealed(evaluations, hintedCols, guesses.length)) {
+            setToast("كل الحروف مكشوفة");
+            return;
+          }
+          setHintSheetOpen(true);
         }}
         hintUsed={hintUsed}
         hintAwaitingGuess={hintAwaitingGuess}
+        hintBalance={hintBalance}
         hintDisabled={inputLocked || hintUsed || hintAwaitingGuess || adBusy}
       />
 

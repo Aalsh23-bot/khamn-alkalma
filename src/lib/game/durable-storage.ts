@@ -14,6 +14,9 @@ export const DURABLE_KEYS = [
   // legacy round keys (migrated on read; still mirrored if present)
   "khamsa:daily",
   "khamsa:challenge",
+  "khamsa_free_hint_date_v1",
+  "khamsa_hint_balance_v1",
+  "khamsa_anon_device_id_v1",
 ] as const;
 
 /**

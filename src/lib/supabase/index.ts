@@ -15,6 +15,8 @@ export type {
 } from "./types";
 export {
   getSession,
+  ensureAuthSession,
+  isRegisteredUser,
   signInWithAppleNative,
   signInWithEmail,
   signOut,

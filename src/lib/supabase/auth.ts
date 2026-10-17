@@ -5,6 +5,8 @@ export type AuthUser = {
   id: string;
   email: string | null;
   displayName: string | null;
+  /** True for Supabase anonymous sessions (not a real account). */
+  isAnonymous: boolean;
 };
 
 export function toAuthUser(user: User | null | undefined): AuthUser | null {
@@ -14,6 +16,9 @@ export function toAuthUser(user: User | null | undefined): AuthUser | null {
     full_name?: string;
     name?: string;
   } | undefined;
+  const isAnonymous = Boolean(
+    (user as { is_anonymous?: boolean }).is_anonymous,
+  );
   return {
     id: user.id,
     email: user.email ?? null,
@@ -23,7 +28,15 @@ export function toAuthUser(user: User | null | undefined): AuthUser | null {
       meta?.name?.trim() ||
       user.email?.split("@")[0] ||
       null,
+    isAnonymous,
   };
+}
+
+/** Real (non-anonymous) signed-in account — for UI labels / account screen. */
+export function isRegisteredUser(
+  user: AuthUser | null | undefined,
+): user is AuthUser {
+  return Boolean(user && !user.isAnonymous);
 }
 
 export async function getSession(): Promise<Session | null> {
@@ -34,6 +47,27 @@ export async function getSession(): Promise<Session | null> {
   return data.session;
 }
 
+/**
+ * Ensure a Supabase session exists for IAP / server RPCs.
+ * Uses anonymous sign-in when the player is not logged in (auth.uid() still set).
+ * Enable Anonymous Sign-Ins in the Supabase Auth dashboard.
+ */
+export async function ensureAuthSession(): Promise<Session> {
+  const sb = getSupabase();
+  if (!sb) throw new Error("Supabase غير مضبوط");
+
+  const { data: existing, error: existingErr } = await sb.auth.getSession();
+  if (existingErr) throw existingErr;
+  if (existing.session?.user?.id) return existing.session;
+
+  const { data, error } = await sb.auth.signInAnonymously();
+  if (error) throw error;
+  if (!data.session?.user?.id) {
+    throw new Error("تعذّر إنشاء جلسة مجهولة للشراء");
+  }
+  return data.session;
+}
+
 export async function signUpWithEmail(
   email: string,
   password: string,
@@ -41,6 +75,23 @@ export async function signUpWithEmail(
 ): Promise<{ user: AuthUser | null; needsEmailConfirm: boolean }> {
   const sb = getSupabase();
   if (!sb) throw new Error("Supabase غير مضبوط");
+
+  // Upgrade anonymous → permanent account (keeps same uid / hint balance).
+  const { data: existing } = await sb.auth.getSession();
+  if (existing.session?.user && (existing.session.user as { is_anonymous?: boolean }).is_anonymous) {
+    const { data, error } = await sb.auth.updateUser({
+      email: email.trim(),
+      password,
+      data: displayName?.trim()
+        ? { display_name: displayName.trim() }
+        : undefined,
+    });
+    if (error) throw error;
+    return {
+      user: toAuthUser(data.user),
+      needsEmailConfirm: !data.user?.email_confirmed_at,
+    };
+  }
 
   const { data, error } = await sb.auth.signUp({
     email: email.trim(),
@@ -66,6 +117,15 @@ export async function signInWithEmail(
   const sb = getSupabase();
   if (!sb) throw new Error("Supabase غير مضبوط");
 
+  // Sign-in must NOT convert an anonymous session into an email account.
+  // Capture anonymous token so purchased hints can merge into the existing account.
+  const { data: existing } = await sb.auth.getSession();
+  const prevAccess =
+    existing.session?.user &&
+    (existing.session.user as { is_anonymous?: boolean }).is_anonymous
+      ? existing.session.access_token
+      : null;
+
   const { data, error } = await sb.auth.signInWithPassword({
     email: email.trim(),
     password,
@@ -73,6 +133,19 @@ export async function signInWithEmail(
   if (error) throw error;
   const user = toAuthUser(data.user);
   if (!user) throw new Error("تعذّر تسجيل الدخول");
+
+  if (prevAccess && data.user?.id) {
+    try {
+      await sb.functions.invoke("merge-anonymous-hints", {
+        body: { previous_access_token: prevAccess },
+      });
+      const { syncHintBalanceFromServer } = await import("@/lib/iap/purchases");
+      await syncHintBalanceFromServer();
+    } catch {
+      /* restore / later sync may recover purchased balance */
+    }
+  }
+
   return user;
 }
 
@@ -188,6 +261,15 @@ export async function signInWithAppleNative(): Promise<AuthUser> {
   const family = result.response.familyName?.trim();
   const fullName = [given, family].filter(Boolean).join(" ").trim();
 
+  // Capture anonymous session so we can merge hint balance if Apple creates a new uid.
+  const { data: before } = await sb.auth.getSession();
+  const prevAccess = before.session?.access_token ?? null;
+  const prevWasAnonymous = Boolean(
+    before.session?.user &&
+      (before.session.user as { is_anonymous?: boolean }).is_anonymous,
+  );
+  const prevUserId = before.session?.user?.id ?? null;
+
   const { data, error } = await sb.auth.signInWithIdToken({
     provider: "apple",
     token: identityToken,
@@ -220,11 +302,31 @@ export async function signInWithAppleNative(): Promise<AuthUser> {
     }
   }
 
+  // If Apple signed into a different uid, move purchased hints from the anonymous user.
+  if (
+    prevWasAnonymous &&
+    prevAccess &&
+    prevUserId &&
+    data.user?.id &&
+    data.user.id !== prevUserId
+  ) {
+    try {
+      await sb.functions.invoke("merge-anonymous-hints", {
+        body: { previous_access_token: prevAccess },
+      });
+      const { syncHintBalanceFromServer } = await import("@/lib/iap/purchases");
+      await syncHintBalanceFromServer();
+    } catch {
+      /* balance may still be recoverable via restore */
+    }
+  }
+
   const user = toAuthUser(data.user);
   if (!user) throw new Error("تعذّر تسجيل الدخول بـ Apple");
   return {
     ...user,
     displayName: user.displayName || fullName || user.email,
+    isAnonymous: false,
   };
 }
 

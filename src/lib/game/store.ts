@@ -1,17 +1,8 @@
 import { create } from "zustand";
-import {
-  evaluate,
-  hardModeError,
-  type LetterStatus,
-} from "./evaluate";
+import { evaluate, hardModeError } from "./evaluate";
 import { MAX_GUESSES, WORD_LENGTH, normalizeWord } from "./normalize";
-import { dailyAnswer, localDateKey, puzzleNumber } from "./daily";
-import { displayWord, isValidGuess, stageAnswer, STAGE_COUNT } from "./words";
-import {
-  applyAchievements,
-  evaluateNewAchievements,
-} from "./achievement-logic";
-import type { AchievementsSave } from "./achievements";
+import { localDateKey, puzzleNumber } from "./daily";
+import { displayWord, isValidGuess, STAGE_COUNT } from "./words";
 import {
   clearChallengeCodeFromUrl,
   readChallengeCodeFromLocation,
@@ -24,18 +15,9 @@ import {
   loadStages,
   loadStats,
   saveAchievements,
-  saveChallengeStats,
-  applyChallengeMatchResult,
-  saveRound,
   saveSettings,
   saveStages,
   saveStats,
-  type ChallengeStatsSave,
-  type Mode,
-  type Screen,
-  type SettingsSave,
-  type StagesSave,
-  type StatsSave,
 } from "./storage";
 import * as sfx from "./audio";
 import {
@@ -48,7 +30,6 @@ import {
   rematchFriendChallenge,
   submitChallengeResult,
   submitDailyResult,
-  type ChallengeLobby,
 } from "@/lib/supabase/api";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import {
@@ -56,6 +37,26 @@ import {
   saveCachedLexicon,
   shouldRefreshLexicon,
 } from "./lexicon-sync";
+import { MAX_HINTS_PER_ROUND } from "./store-constants";
+import {
+  freshChallenge,
+  freshDaily,
+  freshStage,
+  roundFromSave,
+} from "./store-rounds";
+import { consumePurchasedHint } from "./hint-economy";
+import { trackEvent } from "@/lib/analytics";
+import { unlockAchievements } from "./store-achievements";
+import {
+  applyLobbyToStore,
+  beginOnlineMatch,
+  mapChallengeError,
+} from "./store-challenge-flow";
+import { persist } from "./store-persist";
+import type { GameStore } from "./store-types";
+
+export { MAX_HINTS_PER_ROUND } from "./store-constants";
+export type { Mode, Screen, GameStore } from "./store-types";
 
 function syncDailyResult(guesses: string[], won: boolean, hardMode: boolean) {
   void submitDailyResult({ guesses, won, hardMode }).catch(() => {
@@ -75,376 +76,6 @@ function syncLexiconInBackground() {
       /* keep cache / bundled */
     }
   })();
-}
-
-function mapChallengeError(message: string): string {
-  const m = message.toLowerCase();
-  if (m.includes("not authenticated")) return "سجّل الدخول أولاً لتحدّي الأصدقاء";
-  if (m.includes("expired")) return "انتهت صلاحية كود التحدّي";
-  if (m.includes("not found")) return "كود التحدّي غير موجود";
-  if (m.includes("full")) return "هذا التحدّي ممتلئ";
-  if (m.includes("not joinable")) return "لا يمكن الانضمام لهذا التحدّي";
-  if (m.includes("waiting for opponent")) return "بانتظار صديقك…";
-  if (m.includes("series still in progress")) return "السلسلة لسا ما خلصت";
-  if (m.includes("series already complete")) return "انتهت السلسلة — ابدأ إعادة أو تحدّياً جديداً";
-  return message || "تعذّر إكمال التحدّي";
-}
-
-export type { Mode, Screen };
-
-export interface GameStore {
-  hydrated: boolean;
-  screen: Screen;
-  mode: Mode;
-  stageLevel: number;
-  dateKey: string;
-  puzzleNum: number;
-  answer: string;
-  guesses: string[];
-  evaluations: LetterStatus[][];
-  current: string;
-  status: "playing" | "won" | "lost";
-  hintUsed: boolean;
-  hintCount: number;
-  hintAwaitingGuess: boolean;
-  hintedCols: number[];
-  revealing: boolean;
-  shake: boolean;
-  toast: string | null;
-  settings: SettingsSave;
-  stats: StatsSave;
-  stages: StagesSave;
-  achievements: AchievementsSave;
-  challengeStats: ChallengeStatsSave;
-  challengeCode: string | null;
-  challengeRole: "host" | "guest" | null;
-  challengeExpiresAt: string | null;
-  challengeLobby: ChallengeLobby | null;
-  modal:
-    | "help"
-    | "stats"
-    | "settings"
-    | "result"
-    | "install"
-    | "privacy"
-    | "badge"
-    | "challengeInvite"
-    | "challengeHub"
-    | "challengeJoin"
-    | "auth"
-    | "wordsAdmin"
-    | null;
-  hydrate: () => void;
-  goHome: () => void;
-  openStages: () => void;
-  startDaily: () => void;
-  startStage: (level: number) => void;
-  /** Open challenge hub, or join with a shared code. */
-  startChallenge: (code?: string) => void;
-  openChallengeHub: () => void;
-  joinChallengeWithCode: (code: string) => void;
-  createOnlineChallenge: () => void;
-  refreshChallengeLobby: () => void;
-  nextStage: () => void;
-  retryStage: () => void;
-  /** After a loss: undo last guess (call only after rewarded ad). */
-  reviveAfterLoss: () => void;
-  /** After a loss on stages: restart level with a different word. */
-  retryStageNewWord: () => void;
-  /** Start a brand-new friend challenge (new random word). */
-  newChallenge: () => void;
-  /** Same code/room: start a fresh best-of-5 series after the previous ends. */
-  rematchChallenge: () => void;
-  typeLetter: (ch: string) => void;
-  backspace: () => void;
-  submit: () => void;
-  finishReveal: () => void;
-  useHint: () => void;
-  setToast: (msg: string | null) => void;
-  setModal: (modal: GameStore["modal"]) => void;
-  dismissBadge: () => void;
-  setHardMode: (on: boolean) => void;
-  setSound: (on: boolean) => void;
-}
-
-function persist(get: () => GameStore) {
-  try {
-    const s = get();
-    if (s.screen !== "play") return;
-    saveRound(s.mode, {
-      version: 3,
-      dateKey: s.dateKey,
-      answer: s.answer,
-      guesses: s.guesses,
-      evaluations: s.evaluations,
-      current: s.current,
-      status: s.status,
-      hintUsed: s.hintCount >= MAX_HINTS_PER_ROUND,
-      hintCount: s.hintCount,
-      hintAwaitingGuess: s.hintAwaitingGuess,
-      hintedCols: s.hintedCols,
-      stageLevel: s.stageLevel,
-      challengeCode: s.challengeCode ?? undefined,
-    });
-  } catch {
-    /* storage blocked */
-  }
-}
-
-export const MAX_HINTS_PER_ROUND = 2;
-
-function freshDaily() {
-  const dateKey = localDateKey();
-  return {
-    mode: "daily" as const,
-    dateKey,
-    puzzleNum: puzzleNumber(dateKey),
-    stageLevel: 0,
-    answer: dailyAnswer(dateKey),
-    guesses: [] as string[],
-    evaluations: [] as LetterStatus[][],
-    current: "",
-    status: "playing" as const,
-    hintUsed: false,
-    hintCount: 0,
-    hintAwaitingGuess: false,
-    hintedCols: [] as number[],
-    revealing: false,
-    shake: false,
-    challengeCode: null as string | null,
-  };
-}
-
-function freshStage(level: number, order: number[]) {
-  const dateKey = localDateKey();
-  return {
-    mode: "stages" as const,
-    dateKey,
-    puzzleNum: level,
-    stageLevel: level,
-    answer: stageAnswer(level, order),
-    guesses: [] as string[],
-    evaluations: [] as LetterStatus[][],
-    current: "",
-    status: "playing" as const,
-    hintUsed: false,
-    hintCount: 0,
-    hintAwaitingGuess: false,
-    hintedCols: [] as number[],
-    revealing: false,
-    shake: false,
-    challengeCode: null as string | null,
-  };
-}
-
-function freshChallenge(answer: string, code: string) {
-  const dateKey = localDateKey();
-  return {
-    mode: "challenge" as const,
-    dateKey,
-    puzzleNum: 0,
-    stageLevel: 0,
-    answer,
-    guesses: [] as string[],
-    evaluations: [] as LetterStatus[][],
-    current: "",
-    status: "playing" as const,
-    hintUsed: false,
-    hintCount: 0,
-    hintAwaitingGuess: false,
-    hintedCols: [] as number[],
-    revealing: false,
-    shake: false,
-    challengeCode: code,
-  };
-}
-
-function roundFromSave(
-  saved: NonNullable<ReturnType<typeof loadRound>>,
-  extras: {
-    mode: Mode;
-    puzzleNum: number;
-    stageLevel: number;
-    dateKey: string;
-    challengeCode?: string | null;
-  },
-) {
-  const hintCount = Math.min(
-    MAX_HINTS_PER_ROUND,
-    Math.max(
-      0,
-      saved.hintCount ?? (saved.hintUsed ? 1 : 0),
-    ),
-  );
-  return {
-    ...extras,
-    answer: saved.answer,
-    guesses: saved.guesses,
-    evaluations: saved.evaluations,
-    current: saved.status === "playing" ? saved.current : "",
-    status: saved.status,
-    hintCount,
-    hintUsed: hintCount >= MAX_HINTS_PER_ROUND,
-    hintAwaitingGuess: Boolean(saved.hintAwaitingGuess),
-    hintedCols: saved.hintedCols ?? [],
-    revealing: false,
-    shake: false,
-    challengeCode: extras.challengeCode ?? saved.challengeCode ?? null,
-  };
-}
-
-function unlockAchievements(
-  current: AchievementsSave,
-  ctx: Parameters<typeof evaluateNewAchievements>[1],
-): AchievementsSave {
-  const newly = evaluateNewAchievements(current, ctx);
-  if (newly.length === 0) return current;
-  const next = applyAchievements(current, newly);
-  saveAchievements(next);
-  return next;
-}
-
-
-function beginOnlineMatch(
-  set: (partial: Partial<GameStore>) => void,
-  get: () => GameStore,
-  word: string,
-  code: string,
-  role: "host" | "guest",
-  lobby?: ChallengeLobby | null,
-) {
-  const round = lobby?.round_number ?? 1;
-  const maxRounds = lobby?.max_rounds ?? 5;
-  const toast =
-    round > 1
-      ? `الجولة ${round} من ${maxRounds} — أول واحد يوصل ٣ يفوز`
-      : "التحدّي بدأ — أفضل من ٥ · أول واحد يوصل ٣ يفوز";
-  set({
-    screen: "play",
-    ...freshChallenge(word, code),
-    challengeRole: role,
-    challengeLobby: lobby ?? null,
-    modal: null,
-    toast,
-    revealing: false,
-    shake: false,
-  });
-  persist(get);
-}
-
-function seriesOutcomeForRole(
-  lobby: ChallengeLobby,
-): "win" | "loss" | "draw" | "pending" {
-  if (!lobby.series_complete) return "pending";
-  const mine = lobby.role === "host" ? lobby.host_score : lobby.guest_score;
-  const theirs = lobby.role === "host" ? lobby.guest_score : lobby.host_score;
-  if (mine > theirs) return "win";
-  if (mine < theirs) return "loss";
-  return "draw";
-}
-
-function applyLobbyToStore(
-  set: (partial: Partial<GameStore>) => void,
-  get: () => GameStore,
-  lobby: ChallengeLobby,
-) {
-  const s = get();
-  const patch: Partial<GameStore> = {
-    challengeLobby: lobby,
-    challengeExpiresAt: lobby.expires_at,
-    challengeRole: lobby.role,
-    challengeCode: lobby.code,
-  };
-
-  const wordChanged =
-    Boolean(lobby.word) &&
-    s.mode === "challenge" &&
-    Boolean(s.answer) &&
-    lobby.word !== s.answer;
-
-  const roundAdvanced =
-    lobby.round_number > (s.challengeLobby?.round_number ?? 0);
-
-  // Start / resume an active round (first join, next word, or rematch).
-  if (lobby.status === "active" && lobby.word) {
-    const shouldStart =
-      s.screen !== "play" ||
-      s.mode !== "challenge" ||
-      !s.answer ||
-      wordChanged ||
-      (roundAdvanced && (s.status === "won" || s.status === "lost" || s.modal === "result"));
-    if (shouldStart) {
-      beginOnlineMatch(set, get, lobby.word, lobby.code, lobby.role, lobby);
-      return;
-    }
-  }
-
-  if (lobby.status === "expired" && s.modal === "challengeInvite") {
-    set({
-      ...patch,
-      toast: "انتهت صلاحية الكود — أنشئ تحدّياً جديداً",
-      modal: null,
-      challengeCode: null,
-      challengeRole: null,
-    });
-    return;
-  }
-
-  set(patch);
-
-  if (lobby.status === "done" || (lobby.host_finished && lobby.guest_finished)) {
-    const me = challengeSideForRole(lobby, lobby.role);
-    const oppRole = lobby.role === "host" ? "guest" : "host";
-    const opp = challengeSideForRole(lobby, oppRole);
-    const roundOutcome = challengeOutcome(me, opp);
-    if (roundOutcome === "pending") return;
-
-    // Between rounds: keep result UI; lifetime stats wait for series end.
-    if (!lobby.series_complete) {
-      set({ challengeLobby: lobby, modal: "result" });
-      return;
-    }
-
-    const outcome = seriesOutcomeForRole(lobby);
-    if (outcome === "pending") return;
-
-    let challengeStats = get().challengeStats;
-    const seriesKey = `khamsa:ch-series:${lobby.code}:${lobby.host_score}-${lobby.guest_score}:r${lobby.round_number}`;
-    let counted = false;
-    try {
-      counted =
-        typeof sessionStorage !== "undefined" &&
-        sessionStorage.getItem(seriesKey) === "1";
-    } catch {
-      counted = false;
-    }
-    if (!counted) {
-      challengeStats = applyChallengeMatchResult(challengeStats, outcome);
-      saveChallengeStats(challengeStats);
-      try {
-        sessionStorage.setItem(seriesKey, "1");
-      } catch {
-        /* ignore */
-      }
-    }
-
-    const achievements = unlockAchievements(get().achievements, {
-      stats: get().stats,
-      stages: get().stages,
-      challengeStats,
-      won: outcome === "win",
-      guessCount: me.guesses ?? get().guesses.length,
-      stageLevel: 0,
-      mode: "challenge",
-      challengeOutcome: outcome,
-    });
-    set({
-      challengeStats,
-      achievements,
-      challengeLobby: lobby,
-      modal: "result",
-    });
-  }
 }
 
 export const useGame = create<GameStore>((set, get) => ({
@@ -488,10 +119,12 @@ export const useGame = create<GameStore>((set, get) => ({
         revealing: false,
         shake: false,
       });
+      trackEvent("app_open", { via: "invite" });
       get().joinChallengeWithCode(inviteCode);
       return;
     }
 
+    const firstRunHelp = !settings.seenHelp;
     set({
       hydrated: true,
       screen: "home",
@@ -500,11 +133,25 @@ export const useGame = create<GameStore>((set, get) => ({
       stages,
       achievements,
       challengeStats,
-      modal: achievements.pending.length ? "badge" : null,
+      modal: achievements.pending.length
+        ? "badge"
+        : firstRunHelp
+          ? "help"
+          : null,
       toast: null,
       revealing: false,
       shake: false,
     });
+    trackEvent("app_open", {});
+    void import("@/lib/iap/purchases")
+      .then(async (m) => {
+        // initPurchases no-ops when hint_packs_enabled is false.
+        await m.initPurchases();
+        await m.syncHintBalanceFromServer();
+      })
+      .catch(() => {
+        /* IAP optional until keys/products are live */
+      });
   },
 
   goHome: () => {
@@ -544,9 +191,11 @@ export const useGame = create<GameStore>((set, get) => ({
         toast: null,
         revealing: false,
       });
+      trackEvent("game_start", { mode: "daily", resumed: true });
       return;
     }
     set({ screen: "play", ...freshDaily(), modal: null, toast: null });
+    trackEvent("game_start", { mode: "daily", resumed: false });
     persist(get);
   },
 
@@ -718,6 +367,7 @@ export const useGame = create<GameStore>((set, get) => ({
         toast: null,
         revealing: false,
       });
+      trackEvent("game_start", { mode: "stages", stage: level, resumed: true });
       return;
     }
     set({
@@ -726,6 +376,7 @@ export const useGame = create<GameStore>((set, get) => ({
       modal: null,
       toast: null,
     });
+    trackEvent("game_start", { mode: "stages", stage: level, resumed: false });
     persist(get);
   },
 
@@ -947,7 +598,7 @@ export const useGame = create<GameStore>((set, get) => ({
     }
   },
 
-  useHint: () => {
+  useHint: (source: "balance" | "ad" = "balance") => {
     const s = get();
     if (
       !s.hydrated ||
@@ -967,6 +618,8 @@ export const useGame = create<GameStore>((set, get) => ({
         return;
       }
     }
+    // Round hints come from balance or rewarded ad (caller chooses). Free daily
+    // hint is claimed in the shop/sheet and added to balance (Kuwait midnight).
     const known = new Set<number>();
     for (let g = 0; g < s.guesses.length; g++) {
       const ev = s.evaluations[g] ?? [];
@@ -981,6 +634,10 @@ export const useGame = create<GameStore>((set, get) => ({
       set({ toast: "كل الحروف مكشوفة" });
       return;
     }
+    // Spend only after we know a letter can be revealed.
+    if (source === "balance") {
+      if (!consumePurchasedHint()) return;
+    }
     const col = unknown[0]!;
     const hintCount = s.hintCount + 1;
     set({
@@ -988,7 +645,12 @@ export const useGame = create<GameStore>((set, get) => ({
       hintUsed: hintCount >= MAX_HINTS_PER_ROUND,
       hintAwaitingGuess: true,
       hintedCols: [...s.hintedCols, col],
-      toast: `الحرف في الموضع ${col + 1} هو «${s.answer[col]}»`,
+      toast: `🎉 حصلت على تلميح · الحرف في الموضع ${col + 1} هو «${s.answer[col]}»`,
+    });
+    trackEvent("hint_used", {
+      kind: source,
+      mode: s.mode,
+      stage: s.mode === "stages" ? s.stageLevel : null,
     });
     persist(get);
   },

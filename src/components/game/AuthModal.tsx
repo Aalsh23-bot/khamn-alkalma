@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import type { AuthUser } from "@/lib/supabase/auth";
+import { isRegisteredUser, type AuthUser } from "@/lib/supabase/auth";
 import { isIosApp } from "@/lib/native";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +51,13 @@ export function AuthModal({
   const [profileSnapshot, setProfileSnapshot] = useState<AuthUser | null>(null);
   const showApple = Boolean(signInWithApple) && isIosApp();
   const locked = busy || deleteStep === "working" || deleteStep === "done";
-  const shownUser = user ?? (deleteStep !== "idle" ? profileSnapshot : null);
+  // Anonymous Supabase sessions are not "signed in" for account UI.
+  const registered =
+    isRegisteredUser(user) ||
+    (deleteStep !== "idle" && isRegisteredUser(profileSnapshot));
+  const shownUser = registered
+    ? (isRegisteredUser(user) ? user : profileSnapshot)
+    : null;
 
   useEffect(() => {
     if (!open) {

@@ -5,6 +5,7 @@ import {
   isSupabaseConfigured,
 } from "./env";
 import type { Database } from "./types";
+import { secureAuthStorage } from "./secure-auth-storage";
 
 export type AppSupabaseClient = SupabaseClient<Database>;
 
@@ -13,6 +14,7 @@ let client: AppSupabaseClient | null = null;
 /**
  * Browser / Capacitor Supabase client (anon key + RLS).
  * Returns `null` when env is missing so local play still works offline.
+ * Session persists via Keychain/Keystore on native (secureAuthStorage).
  */
 export function getSupabase(): AppSupabaseClient | null {
   if (!isSupabaseConfigured()) return null;
@@ -26,7 +28,9 @@ export function getSupabase(): AppSupabaseClient | null {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      storage: typeof localStorage !== "undefined" ? localStorage : undefined,
+      storage: secureAuthStorage,
+      // Async Keychain storage — required for Capacitor secure plugin.
+      storageKey: "khamsa-auth",
     },
   });
 
