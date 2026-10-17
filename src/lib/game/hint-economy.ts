@@ -85,11 +85,11 @@ export function resolveHintOffer(
 export function hintOfferLabel(kind: HintOfferKind, balance = loadHintBalance()): string {
   switch (kind) {
     case "free":
-      return "تلميح مجاني";
+      return "💡 تلميح مجاني";
     case "balance":
-      return `تلميح (${balance})`;
+      return `💡 تلميح (${balance})`;
     case "ad":
-      return "تلميح مقابل إعلان";
+      return "▶️ تلميح مقابل إعلان";
     case "exhausted":
       return "استُخدم التلميحان";
   }

@@ -927,10 +927,7 @@ export const useGame = create<GameStore>((set, get) => ({
       hintUsed: hintCount >= MAX_HINTS_PER_ROUND,
       hintAwaitingGuess: true,
       hintedCols: [...s.hintedCols, col],
-      toast:
-        offer === "ad"
-          ? `حصلت على تلميح · الحرف في الموضع ${col + 1} هو «${s.answer[col]}»`
-          : `الحرف في الموضع ${col + 1} هو «${s.answer[col]}»`,
+      toast: `🎉 حصلت على تلميح · الحرف في الموضع ${col + 1} هو «${s.answer[col]}»`,
     });
     trackEvent("hint_used", {
       kind: offer,

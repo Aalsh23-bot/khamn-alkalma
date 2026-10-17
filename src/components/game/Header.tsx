@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { BarChart3, HelpCircle, House, Lightbulb, Settings2, Share2 } from "lucide-react";
+import { BarChart3, HelpCircle, House, Lightbulb, Play, Settings2, Share2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Mode } from "@/lib/game/store";
 import type { HintOfferKind } from "@/lib/game/hint-economy";
@@ -28,7 +28,7 @@ function IconBtn({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "relative flex size-11 items-center justify-center rounded-xl text-fg transition-colors duration-150",
+        "relative flex min-h-11 min-w-11 items-center justify-center rounded-xl text-fg transition-colors duration-150",
         "hover:bg-fg/6 active:scale-[0.96] disabled:opacity-35",
         active && "bg-accent/12 text-accent",
         className,
@@ -66,6 +66,7 @@ export function Header({
   hintAwaitingGuess?: boolean;
   hintOffer?: HintOfferKind;
 }) {
+  const balance = loadHintBalance();
   const kind: HintOfferKind = hintUsed
     ? "exhausted"
     : hintAwaitingGuess
@@ -74,15 +75,16 @@ export function Header({
 
   const hintLabel = hintAwaitingGuess
     ? "أدخل تخميناً ثم استخدم التلميح مرة أخرى"
-    : hintOfferLabel(kind, loadHintBalance());
+    : hintOfferLabel(kind, balance);
 
+  // Plan §15: free=green, ad=orange + video, balance shows count.
   const hintTone =
     kind === "free"
-      ? "bg-correct/20"
+      ? "bg-[#6aaa64] text-white"
       : kind === "ad"
-        ? "bg-present/25"
+        ? "bg-[#e67e22] text-white"
         : kind === "balance"
-          ? "bg-accent/12 text-accent"
+          ? "bg-accent/15 text-accent"
           : undefined;
 
   return (
@@ -117,13 +119,26 @@ export function Header({
           onClick={onHint}
           active={hintUsed || Boolean(hintAwaitingGuess)}
           disabled={hintDisabled}
-          className={hintTone}
+          className={cn("px-1.5", hintTone)}
         >
-          <span className="flex flex-col items-center gap-0.5">
-            <Lightbulb className="size-5" strokeWidth={1.8} />
+          <span className="flex max-w-[5.5rem] flex-col items-center gap-0.5">
+            {kind === "ad" ? (
+              <span className="flex items-center gap-0.5">
+                <Play className="size-3.5 fill-current" strokeWidth={1.6} />
+                <Lightbulb className="size-4" strokeWidth={1.8} />
+              </span>
+            ) : (
+              <Lightbulb className="size-5" strokeWidth={1.8} />
+            )}
             {!hintUsed && !hintAwaitingGuess && (
-              <span className="max-w-[4.5rem] truncate text-[8px] font-semibold leading-none">
-                {kind === "free" ? "مجاني" : kind === "ad" ? "إعلان" : kind === "balance" ? "رصيد" : ""}
+              <span className="truncate text-[8px] font-bold leading-none">
+                {kind === "free"
+                  ? "تلميح مجاني"
+                  : kind === "ad"
+                    ? "تلميح مقابل إعلان"
+                    : kind === "balance"
+                      ? `تلميح (${balance})`
+                      : ""}
               </span>
             )}
           </span>
