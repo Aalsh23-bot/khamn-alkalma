@@ -119,7 +119,7 @@ export async function flushAnalytics(): Promise<void> {
   }
 }
 
-/** Report a bad ad — also stored in ad_reports via dedicated helper. */
+/** Report a bad ad via rate-limited RPC (max 5/hour/device). */
 export async function submitAdReport(input: {
   reason: string;
   note?: string;
@@ -127,6 +127,9 @@ export async function submitAdReport(input: {
   const sb = getSupabase();
   if (!sb) return { ok: false, error: "الخدمة غير متاحة الآن" };
   const deviceId = getAnonymousDeviceId();
+  if (!deviceId || deviceId.length < 8 || deviceId === "unknown") {
+    return { ok: false, error: "تعذّر التحقق من الجهاز" };
+  }
   const row = {
     device_id: deviceId,
     reason: input.reason.slice(0, 80),
@@ -135,10 +138,22 @@ export async function submitAdReport(input: {
     platform: Capacitor.getPlatform(),
   };
   try {
-    const { error } = await sb.from("ad_reports").insert(row);
+    const { data, error } = await sb.rpc("submit_ad_report", {
+      p_device_id: row.device_id,
+      p_reason: row.reason,
+      p_note: row.note,
+      p_app_version: row.app_version,
+      p_platform: row.platform,
+    });
     if (error) return { ok: false, error: error.message };
+    const payload = data as { ok?: boolean; error?: string } | null;
+    if (!payload?.ok) {
+      if (payload?.error === "rate_limited") {
+        return { ok: false, error: "وصلت للحد الأقصى من البلاغات لهذا الساعة (5)" };
+      }
+      return { ok: false, error: payload?.error || "تعذّر إرسال البلاغ" };
+    }
     trackEvent("ad_report", { reason: row.reason });
-    // Best-effort notify edge function (email). Failures are non-blocking.
     try {
       await sb.functions.invoke("ad-report-notify", { body: row });
     } catch {
